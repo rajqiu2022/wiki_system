@@ -1,0 +1,159 @@
+site_name: Wiki
+site_url: http://localhost:8001/site/
+theme:
+  name: material
+  language: zh
+  palette:
+  - scheme: default
+    primary: indigo
+    accent: indigo
+    toggle:
+      icon: material/brightness-7
+      name: 切换到暗色模式
+  - scheme: slate
+    primary: indigo
+    accent: indigo
+    toggle:
+      icon: material/brightness-4
+      name: 切换到亮色模式
+  features:
+  - navigation.instant
+  - navigation.tracking
+  - search.highlight
+  - content.code.copy
+nav:
+- Home: index.md
+- Guidance:
+  - Guidance: e92ff198-1710-4bb7-bf97-241c68d1c8b2.md
+- Guidance & Tutorials:
+  - Basic usage of Squareline with MaTouch 4.0: a74b2ed7-058b-4aed-ab19-10f2a16bc924.md
+  - Basic use of Squareline: 64a9614d-a8a5-41c4-9e85-7dabb2d7623c.md
+  - Get Start with ESP-IDF: 8f2b453d-eead-445a-85d8-5fba0bd1d321.md
+  - Basic usage of Squareline with MaTouch 2.1: 761a2d30-3384-4377-bd61-72963cec5982.md
+  - Use LVGL on Matouch screens more easily: 9af34009-a99a-45f3-b79b-5e1cb8150bd7.md
+  - Guide to Installing Home Assistant and ESPHome with Docker: 3d40b1e0-3ea1-4d94-9902-67dba96fcc8f.md
+  - Installing ESP32 Add on in Arduino IDE: 148c4ca5-727e-45d6-a55b-2bbadfc6e8d3.md
+  - Screen touch coordinates calibration: e562cf7c-0707-423a-981b-d482dd7ea9b5.md
+- Display & Touch Screen:
+  - Sunton ESP32 2.8 inch 240x320 TFT with Touch: 72950187-97d1-42c3-8ff2-224ad722edf1.md
+  - Sunton ESP32 S3 4.3 inch 800x400 IPS with Touch: 459a3f7f-58c6-497b-a605-997a71cb9c97.md
+  - Sunton ESP32 S3 5 7 inch IPS with Touch: 5cb65d87-b1b8-4ee2-8962-1325da8e52a0.md
+  - MaESP ESP32 Color LCD: a17b055f-7e0f-4219-b106-66dc569679d0.md
+  - ESP32-S3 Parallel TFT 3.16 ST7701S: 1c50347c-a7cb-4f2d-bc82-95e471021856.md
+  - ESP32 S3 Parallel 3.5 TFT with Touch: b81842ee-ba01-4faf-91a9-e848300cd694.md
+  - ESP S3 SPI TFT with Touch 2.8inch: 3d27f269-039a-4814-aa0d-eea91f121495.md
+  - MaTouch ESP32-P4 TFT with Touch 7": 06c4a9aa-3398-48df-8478-38ec722cf8a8.md
+  - MaTouch ESP32-S3 4.2 Triple-Color E-Ink: cbc0290a-9199-4e49-89ac-7d508318f0cb.md
+  - MaTouch ESP32-S3 AMOLED with Touch 1.8'' CHSC6417: eceea6a8-b6a1-498f-b2ce-06fb61004b3d.md
+  - MaTouch 1.9 inch TFT Breakout: a93cf491-9140-432a-ac5a-561bd79d7a09.md
+  - MaTouch 3.2 TFT LCD with Camera: c301b81c-f2a8-4f60-a5e2-4acedc2365da.md
+  - MaTouch 3.5 TFT Touch with Camera: db0c8b7b-9e84-46b3-830d-6b579b7d84a9.md
+  - MaTouch C3 SPI 3.5 TFT with Touch: e5aaec29-6588-4bea-92e8-1d7846ad2d3e.md
+  - MaTouch ESP32S3-SPI-TFT-with-AI-2.8-ST7789V: ad0b44c5-4fb4-460a-a874-a54e5a17f635.md
+  - MaTouch ESP32 S3 2.1 Rotary TFT with Touch: 2926ae02-4379-44c0-a832-3ab5c5f209f5.md
+  - MaTouch ESP32 S3 7 Paralle  TFT with Touch: d77058aa-fd9b-4059-8291-7f0c1b07372d.md
+  - MaTouch ESP32 S3 AMOLED with Touch 1.8 FT3168: 188b5328-3517-4868-ac6b-b9c00d9c7e92.md
+  - MaTouch ESP32 S3 Rotary IPS Display 1.28 GC9A01: 01d3d973-aeeb-491a-8897-a0c4f09894ee.md
+  - MaTouch S3 Parallel 1.9 TFT with Touch: 1fba5b03-a542-408a-8211-c8a41890d3de.md
+  - MaTouch S3 Parallel 2.8 TFT with Touch: f369b720-df08-4795-972f-8698eaad938b.md
+  - MaTouch S3 Parallel 3.5 TFT with Touch: 0e860ed3-e504-40d7-91b3-5050756909ed.md
+  - MaTouch S3 Parallel 4.0 TFT with Touch: 5692e66e-0d7c-4ab9-931d-1e4823bd6ad0.md
+  - MaTouch S3 Parallel 4.3 TFT with Touch: 500ec490-7377-4b68-9566-1638e0e986b0.md
+  - MaTouch S3 Round SPI 1.28 TFT with Touch: 09c5e744-fc28-4704-9013-a4bba58d7a2e.md
+  - MaTouch S3 SPI 3.5 TFT with Touch: 10a17bce-55a3-4a0a-8407-b00d19edc79a.md
+  - Matouch 1.28 DevKit: 7bdb5256-a2c3-4ea4-95be-031a2ee1cad2.md
+  - Matouch ESP32-S3 Parallel  TFT with Touch 5'': 27d232e1-89a9-4703-af74-a5f6b34a3b86.md
+  - ESP32 UWB Pro with Display: 842bb3a4-e311-4277-85c8-5a16b7bb66e7.md
+- UWB Modules:
+  - MaUWB DW3000-with-STM32-AT-Command: 6de060a9-64a6-4ad9-b4d4-adf58f92bfbb.md
+  - ESP32 DW3000 UWB: 03dfc9da-16b9-4b43-ba72-8c49b5a8b213.md
+  - ESP32 UWB: a9f948a6-1c80-4de7-9972-96a8151553da.md
+  - MaUWB ESP32S3 UWB module: ddacf405-ac0a-45fa-ae44-d82bebc0cba8.md
+  - UWB positioning development with python: 0e82fb22-1575-4d44-ab9d-ea1ad26a979a.md
+  - based uasge of UWB positioning: c9a1e590-867c-46cc-a3d4-2cc8526634dd.md
+- Home Assistant:
+  - How-to-use-Home-Assistant-Relay-8-Channel: 78e99742-286d-4bf9-a561-1ec80e699d9b.md
+  - How to 8 Channel button controller for Home Assistant: c567e821-6138-4498-844b-fd2aac3eb232.md
+  - How to use AC Dimmer for Home Assistant: fcea8bc1-1dca-4bfa-bc78-0fc237104724.md
+  - How to use DC Motor for Home Assistant GA36Y555: 9a192ca6-b0a3-4245-ab46-9c08e266517c.md
+  - Weather Station for Home Assistant ESPHome: cd7c8c9e-d323-490d-a346-b85f92cb0b0f.md
+- Communication & IoT:
+  - 4G LTE Air Monitor: 437df1d0-e0ef-409d-94f7-c98e278e03ff.md
+  - ESP32S3 4G LTE CAT1 SIM7670G: aa2b66e5-46b0-4e74-98b5-bf21de9ca905.md
+  - ESP32 S3 4G LTE CAT1: 70030dcc-8969-4bef-91d7-7c5dc5d4dbc6.md
+  - NBIOT LTE-M Air Monitor: 1a0c5812-48c6-40e7-aef4-426e06e7d1fe.md
+  - Quick Guidance for AgroSense & Gateway Setting for Cloud Service: 21303c54-8299-47cc-8e1b-fc1ba3e40784.md
+  - STM32 LR1121: 4b2c4384-1d07-48aa-9c3e-b5de2aee31d6.md
+  - AgroSense LoRaWAN® Sensor Instruction Manual: 948d32b6-1ec4-4c94-b265-47e6edd49978.md
+  - How to use LoraWan Soil Moisture Sensor: 0c9a5b14-4caa-48ab-b0ad-2bfa6364c1d6.md
+  - LoRaWAN Temperature Humidity Soil Moisture Sensor: a4153288-ccec-43b3-bc1f-952b5b5875cf.md
+  - SenseCAP M2 Multi-Platform LoRaWAN Indoor Gateway: e7a1bbf7-1e74-4e56-912c-83cad19fb2d5.md
+  - SenseLora 4G gateway: 56553403-485e-467f-8374-1f50b84dbc55.md
+  - SenseLora Soil Moisture: eb22f47f-9006-4625-b362-3a43bf0db7d3.md
+  - Maduino LoRa Radio: a6c27cf9-7953-4420-996e-dca416c5b05c.md
+  - Maduino SIM808 GPS Tracker: 246d4349-477f-4992-9b19-16d7bbfebb05.md
+  - Maduino Zero 4G LTE: ee1566f9-6418-43f2-b728-e4c671603898.md
+  - Maduino Zero 4G LTE CAT1 A7670: 5537b5eb-f03f-42ea-9b8b-060aad60fc06.md
+  - Maduino Zero A9G: 552199c6-94d4-4a9e-a915-363bc4bfb721.md
+  - Maduino Zero LoRaWAN Node: 0f1a68ef-74ad-4bd3-b865-3d045bcc98e7.md
+  - Maduino Zero SIM800C: c47ffa7b-5adc-49a3-bea4-d2c516e91833.md
+  - Maduino Zero SIM808 GPS Tracker: 0761ac0d-c675-4122-950c-5c970a7d2c76.md
+  - Maduino Zero SIM868 GPS Tracker: 68c38ed3-0d85-453b-b2dd-072846e85700.md
+  - MaESP A9G: fdd9c933-27c9-4f29-97d8-418008c10401.md
+  - MaESP ESP32 Lora Gateway: 5c00dfa5-e913-4b3e-83e8-745622de9a88.md
+  - 4 Channel Lora Relay 10A: 51c6a1c0-b2b4-45b8-8042-29521e9e58f1.md
+  - Lora AC Dimmer: 0f62fd48-56b4-4151-a872-b82abf330696.md
+  - Lora Relay: fa4bd87f-a49c-43ca-8f92-d0d6e2b5d910.md
+  - Lora Soil Moisture Sensor V3: 0449aca9-3bcb-4452-8fea-a2ecafa34da5.md
+  - MaPIE LoRa RP2040: add49ab5-ea9f-4274-8054-61f9d6b16001.md
+  - Mabee Soil Moisture: 64e2985f-52ec-4558-afda-e53cba2780aa.md
+  - Industrial-grade Soil Remote Monitor: c89c68aa-5f85-4c61-8dbe-c1ac315241dd.md
+  - LoRa Radio Shield: e28b33ed-3301-4db0-8e52-c8e53b91b469.md
+- Development Boards:
+  - Maduino Zero NB IoT: 25008ae1-bc3a-4f33-b619-735b5e2ada15.md
+  - Maduino Zero WiFi Halow: 068e9a46-d53b-4363-b249-7155bd3de09b.md
+  - Maduino Power Line Communication: d9001be3-a201-4ba6-8851-e30f03bd771b.md
+  - Maduino Zero Bluetooth 4.0 HM-13: ac38c1e6-76c6-44cb-b306-4e016497d96f.md
+  - Maduino Zero Canbus with RS485: 4e3bfa3e-77a8-40fe-9ad4-483803949dc0.md
+  - Maduino Zero NFC: 32b67d88-0a6a-471d-951f-4be05d6f6468.md
+  - Maduino Zero WIFI ESP8266: c97c02a6-fd22-45c3-b194-0db7b168b277.md
+  - Maduino Zreo Ethernet: a3268b34-500a-40fa-bfb9-bb25f6380609.md
+  - MaESP Audio: c17702d0-0615-4c50-9ce8-db03945ee225.md
+  - MaESP ESP32: fb3dc960-e10e-4d93-aacd-aca6c8b61548.md
+  - MaESP ESP32 C3 OLED: 3ea31ce3-f430-4146-afe3-931c798dcb3f.md
+  - MaESP ESP8266 OLED: d2b6cba1-040f-478b-8a9d-eee78d995f4f.md
+  - MaESP nRF52840: 0f7b85c7-cb8e-4389-b210-b54cbf1d901a.md
+  - Voice Interaction Hat for MaESP ESP32: ea181443-3300-43a7-bcbf-4c20a81609bb.md
+  - MaPIE RP2040 0.96 OLED: 17c38d8c-cd41-46eb-aa85-4478362ee72c.md
+  - PICO Servo Driver: f7b1326a-1a31-4d18-8aa0-d4a934b461bd.md
+  - Pico W Primer Kit: 1e36f453-9daa-4059-9857-0229d18e1c67.md
+  - ESP8266 WiFi Shield: 3341deb4-1e90-4ef3-847d-7289669a44d3.md
+- Sensors & Accessories:
+  - Industrial grade Soil  Remote Monitor V2: 1e0ee131-de55-4633-a365-35dfd4401a20.md
+  - Voice Interraction Hat: 36c048be-28dc-4546-8cf7-b7bf4d7390cb.md
+  - Mabee CO2: 1048e8e6-eb6b-4851-8bf9-8a347ec1e029.md
+  - ESPWatch: 725d0082-9df6-4a5e-b8fd-885701c44ea9.md
+  - Wind Weather Station: 46b35929-631e-4e2e-b109-ab7e39aa2f80.md
+  - Anemometer: 36389b24-0f81-4a82-92bb-2ff4f2ab860f.md
+  - GPRS GSM GPS Shield: a01bd5a6-6e32-4b37-be7c-3ca06176c836.md
+  - GPS Shield: 384a0a5b-06cf-4ce7-b94f-c4132f9609f9.md
+  - H Bridge Motor Shield: 7fbd6108-3830-4e30-88c4-51af833d377f.md
+- Other:
+  - How to put the esp32&esp32s3 chip into download mode?: c1c24bb9-756f-4bb6-85aa-9e8b0bcd9d64.md
+  - Larger flash and memory: a55174b0-3a03-4c18-8280-9ec53a6c8fad.md
+  - How to use Air Monitor for Home Assistant: f98b9872-152e-4ee7-8979-edfdf79ad4f0.md
+  - How to use Energy Meter for Home Assistant: fd373c42-0bfc-47f0-9889-e7668be5d877.md
+  - How to use OV3660 3M Camera for Home Assistant: a233a785-c9fb-4d94-bfd4-d6a7f8be5a7f.md
+  - How to use Radar for Home Assistant: bd852320-bd98-4c77-be4f-8ec52888ccc3.md
+markdown_extensions:
+- admonition
+- pymdownx.highlight
+- pymdownx.superfences
+- pymdownx.tabbed
+- pymdownx.details
+- tables
+- toc
+plugins:
+- search
+docs_dir: docs
+site_dir: output

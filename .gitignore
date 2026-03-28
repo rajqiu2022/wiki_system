@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Generated output
+output/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+pip_output.txt
+vite_log.txt
+vite_out.txt
+
+# Temp
+temp-upload/
+import_err.txt
+import_log.txt
+
+# Docker
+.dockerignore
