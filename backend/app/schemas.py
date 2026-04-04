@@ -5,11 +5,10 @@ from datetime import datetime
 
 # ---- User ----
 class UserOut(BaseModel):
-    id: str
+    id: int
     username: str
-    display_name: str
-    role: str
-    created_at: datetime
+    role: Optional[str] = None
+    create_time: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -29,77 +28,94 @@ class TokenOut(BaseModel):
 
 class UserCreate(BaseModel):
     username: str
-    display_name: str
     password: str
-    role: str = "editor"
+    role: str = "user"
 
 
-# ---- Document ----
+class UserUpdate(BaseModel):
+    password: Optional[str] = None
+    role: Optional[str] = None
+
+
+# ---- WikiList (Document) ----
 class DocCreate(BaseModel):
-    title: str
-    content: str = ""
-    created_by: Optional[str] = None
+    name: str
+    path: Optional[str] = None
+    description: Optional[str] = ""
+    author: Optional[str] = None
 
 
 class DocUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    status: Optional[str] = None
+    name: Optional[str] = None
+    path: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[int] = None
 
 
 class DocOut(BaseModel):
-    id: str
-    title: str
-    content: str
-    status: str
-    created_by: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    locked_by: Optional[str] = None
-    locked_at: Optional[datetime] = None
-    creator_name: Optional[str] = None
-    locker_name: Optional[str] = None
+    id: int
+    name: Optional[str] = None
+    path: Optional[str] = None
+    description: Optional[str] = None
+    author: Optional[str] = None
+    create_time: Optional[str] = None
+    status: int = 0
+    current_editor: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
 class DocListItem(BaseModel):
-    id: str
-    title: str
-    status: str
-    created_by: Optional[str] = None
-    creator_name: Optional[str] = None
-    updated_at: datetime
-    locked_by: Optional[str] = None
-    locker_name: Optional[str] = None
+    id: int
+    name: Optional[str] = None
+    path: Optional[str] = None
+    author: Optional[str] = None
+    status: int = 0
+    create_time: Optional[str] = None
+    current_editor: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
-# ---- NavNode ----
+# ---- WikiFile ----
+class FileContentOut(BaseModel):
+    id: int
+    list_id: int
+    content: Optional[str] = None
+    modifier: Optional[str] = None
+    modified_time: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FileContentUpdate(BaseModel):
+    content: str
+    modifier: Optional[str] = None
+
+
+# ---- TypeList (Nav) ----
 class NavNodeCreate(BaseModel):
-    title: str
-    parent_id: Optional[str] = None
-    doc_id: Optional[str] = None
-    sort_order: int = 0
+    name: str
+    parent_path: Optional[str] = ""
+    mark: Optional[str] = None
 
 
 class NavNodeUpdate(BaseModel):
-    title: Optional[str] = None
-    parent_id: Optional[str] = None
-    doc_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    name: Optional[str] = None
+    parent_path: Optional[str] = None
+    mark: Optional[str] = None
+    status: Optional[int] = None
 
 
 class NavNodeOut(BaseModel):
-    id: str
-    title: str
-    parent_id: Optional[str] = None
-    doc_id: Optional[str] = None
-    sort_order: int
-    children: List["NavNodeOut"] = []
+    id: int
+    name: Optional[str] = None
+    parent_path: Optional[str] = None
+    mark: Optional[str] = None
+    status: int = 0
 
     class Config:
         from_attributes = True
@@ -107,17 +123,21 @@ class NavNodeOut(BaseModel):
 
 class NavTreeUpdate(BaseModel):
     """批量更新菜单树结构"""
-    nodes: List[dict]  # [{id, parent_id, sort_order}, ...]
+    nodes: List[dict]  # [{id, parent_path, sort_order}, ...]
 
 
 # ---- Publish ----
 class PublishLogOut(BaseModel):
-    id: str
+    id: int
     published_by: Optional[str] = None
-    published_at: datetime
-    doc_count: int
-    status: str
-    message: str
+    published_at: Optional[datetime] = None
+    doc_count: int = 0
+    status: str = "success"
+    message: str = ""
 
     class Config:
         from_attributes = True
+
+
+class PublishRequest(BaseModel):
+    user_id: Optional[int] = None

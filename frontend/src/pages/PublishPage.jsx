@@ -31,30 +31,28 @@ export default function PublishPage({ currentUser }) {
   const lastLog = logs[0]
 
   const handlePublish = () => {
-    if (pendingDocs.length === 0) {
-      message.warning('没有待发布的文档')
-      return
-    }
     Modal.confirm({
       title: '确认发布',
       content: (
         <div>
           <p style={{ color: '#78716C', marginBottom: 12 }}>
-            将发布 <strong style={{ color: '#1C1917' }}>{pendingDocs.length}</strong> 篇待发布文档为静态站点。
+            将发布所有有效文档及当前菜单结构为静态站点。
           </p>
-          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF', marginBottom: 6 }}>本次发布：</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {pendingDocs.slice(0, 8).map(d => (
-                <span key={d.id} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, background: '#DBEAFE', color: '#1E40AF' }}>
-                  {d.title}
-                </span>
-              ))}
-              {pendingDocs.length > 8 && (
-                <span style={{ fontSize: 11, color: '#78716C' }}>...等 {pendingDocs.length} 篇</span>
-              )}
+          {pendingDocs.length > 0 && (
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF', marginBottom: 6 }}>待发布文档（{pendingDocs.length} 篇）：</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {pendingDocs.slice(0, 8).map(d => (
+                  <span key={d.id} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, background: '#DBEAFE', color: '#1E40AF' }}>
+                    {d.name}
+                  </span>
+                ))}
+                {pendingDocs.length > 8 && (
+                  <span style={{ fontSize: 11, color: '#78716C' }}>...等 {pendingDocs.length} 篇</span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ),
       okText: '确认发布',
@@ -66,6 +64,39 @@ export default function PublishPage({ currentUser }) {
         try {
           const result = await publish(currentUser?.id)
           message.success('发布成功！')
+          fetchData()
+        } catch (e) {
+          message.error(e.response?.data?.detail || '发布失败')
+        } finally {
+          setPublishing(false)
+        }
+      },
+    })
+  }
+
+  // 强制发布全部文档
+  const handleForcePublish = () => {
+    Modal.confirm({
+      title: '强制发布全部文档',
+      content: (
+        <div>
+          <p style={{ color: '#DC2626', marginBottom: 12 }}>
+            ⚠️ 此操作将强制发布<strong>所有有效文档</strong>（包括已发布和待发布），共 <strong>{docs.length}</strong> 篇。
+          </p>
+          <p style={{ color: '#78716C', fontSize: 13 }}>
+            适用于：首次部署或修复站点时强制重建所有文档。
+          </p>
+        </div>
+      ),
+      okText: '强制发布',
+      cancelText: '取消',
+      okButtonProps: { style: { background: '#DC2626', borderColor: '#DC2626', borderRadius: 8 } },
+      cancelButtonProps: { style: { borderRadius: 8 } },
+      onOk: async () => {
+        setPublishing(true)
+        try {
+          const result = await publish(currentUser?.id, true)  // 传入 force=true
+          message.success('强制发布成功！')
           fetchData()
         } catch (e) {
           message.error(e.response?.data?.detail || '发布失败')
@@ -150,6 +181,17 @@ export default function PublishPage({ currentUser }) {
             }}
           >
             {publishing ? '发布中...' : '发布站点'}
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            danger
+            loading={publishing}
+            onClick={handleForcePublish}
+            style={{
+              borderRadius: 8, fontWeight: 600,
+            }}
+          >
+            强制发布
           </Button>
         </Space>
       </div>

@@ -6,7 +6,7 @@ import {
   PlusOutlined, DeleteOutlined, EditOutlined, FolderOutlined, FileTextOutlined,
   SaveOutlined, DragOutlined,
 } from '@ant-design/icons'
-import { getNavTree, createNavNode, updateNavNode, deleteNavNode, batchUpdateNav, getDocs } from '../api'
+import { getNavTree, createNavNode, updateNavNode, deleteNavNode, reorderNav, getDocs } from '../api'
 
 export default function NavEditor({ currentUser }) {
   const [tree, setTree] = useState([])
@@ -15,7 +15,7 @@ export default function NavEditor({ currentUser }) {
   const [addOpen, setAddOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editingNode, setEditingNode] = useState(null)
-  const [addParentId, setAddParentId] = useState(null)
+  const [addParentPath, setAddParentPath] = useState('')
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [hasChanges, setHasChanges] = useState(false)
@@ -34,88 +34,102 @@ export default function NavEditor({ currentUser }) {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const flattenTree = (nodes, parentId = null) => {
+  const flattenTree = (nodes, parentPath = '') => {
     const result = []
     nodes.forEach((node, index) => {
-      result.push({ id: node.id, parent_id: parentId, sort_order: index, title: node.title })
-      if (node.children?.length) result.push(...flattenTree(node.children, node.id))
+      const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name
+      result.push({ id: node.id, parent_path: parentPath, name: node.name })
+      if (node.children?.length) result.push(...flattenTree(node.children, currentPath))
     })
     return result
   }
 
   const toTreeData = (nodes) => {
-    return nodes.map((node) => ({
-      key: node.id,
-      title: (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
-          <div style={{
-            width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-            background: node.doc_id ? '#CCFBF1' : '#FEF3C7',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {node.doc_id
-              ? <FileTextOutlined style={{ color: '#0D9488', fontSize: 12 }} />
-              : <FolderOutlined style={{ color: '#D97706', fontSize: 12 }} />
-            }
-          </div>
-          <span style={{ flex: 1, fontWeight: 500, color: '#44403C', fontSize: 13 }}>{node.title}</span>
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 5,
-            background: node.doc_id ? '#CCFBF1' : '#FEF3C7',
-            color: node.doc_id ? '#0D9488' : '#D97706',
-          }}>
-            {node.doc_id ? '文档' : '分组'}
-          </span>
-          <Space size={1} onClick={e => e.stopPropagation()}>
-            <Tooltip title="编辑">
-              <Button type="text" size="small" icon={<EditOutlined />}
-                style={{ color: '#A8A29E', borderRadius: 6 }}
-                onClick={(e) => { e.stopPropagation(); openEdit(node) }}
-              />
-            </Tooltip>
-            <Tooltip title="添加子节点">
-              <Button type="text" size="small" icon={<PlusOutlined />}
-                style={{ color: '#A8A29E', borderRadius: 6 }}
-                onClick={(e) => { e.stopPropagation(); openAdd(node.id) }}
-              />
-            </Tooltip>
-            <Popconfirm
-              title="确认删除？"
-              onConfirm={(e) => { e?.stopPropagation(); handleDeleteNode(node.id) }}
-              onCancel={(e) => e?.stopPropagation()}
-              okButtonProps={{ danger: true, style: { borderRadius: 6 } }}
-              cancelButtonProps={{ style: { borderRadius: 6 } }}
-            >
-              <Tooltip title="删除">
-                <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                  style={{ borderRadius: 6 }}
-                  onClick={(e) => e.stopPropagation()}
+    return nodes.map((node) => {
+      const isDoc = !!node.mark
+      return {
+        key: node.id,
+        title: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+              background: isDoc ? '#CCFBF1' : '#FEF3C7',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {isDoc
+                ? <FileTextOutlined style={{ color: '#0D9488', fontSize: 12 }} />
+                : <FolderOutlined style={{ color: '#D97706', fontSize: 12 }} />
+              }
+            </div>
+            <span style={{ flex: 1, fontWeight: 500, color: '#44403C', fontSize: 13 }}>{node.name}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 5,
+              background: isDoc ? '#CCFBF1' : '#FEF3C7',
+              color: isDoc ? '#0D9488' : '#D97706',
+            }}>
+              {isDoc ? '文档' : '分组'}
+            </span>
+            <Space size={1} onClick={e => e.stopPropagation()}>
+              <Tooltip title="编辑">
+                <Button type="text" size="small" icon={<EditOutlined />}
+                  style={{ color: '#A8A29E', borderRadius: 6 }}
+                  onClick={(e) => { e.stopPropagation(); openEdit(node) }}
                 />
               </Tooltip>
-            </Popconfirm>
-          </Space>
-        </div>
-      ),
-      children: node.children?.length ? toTreeData(node.children) : [],
-    }))
+              <Tooltip title="添加子节点">
+                <Button type="text" size="small" icon={<PlusOutlined />}
+                  style={{ color: '#A8A29E', borderRadius: 6 }}
+                  onClick={(e) => { e.stopPropagation(); openAdd(node) }}
+                />
+              </Tooltip>
+              <Popconfirm
+                title="确认删除？"
+                onConfirm={(e) => { e?.stopPropagation(); handleDeleteNode(node.id) }}
+                onCancel={(e) => e?.stopPropagation()}
+                okButtonProps={{ danger: true, style: { borderRadius: 6 } }}
+                cancelButtonProps={{ style: { borderRadius: 6 } }}
+              >
+                <Tooltip title="删除">
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                    style={{ borderRadius: 6 }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </Tooltip>
+              </Popconfirm>
+            </Space>
+          </div>
+        ),
+        children: node.children?.length ? toTreeData(node.children) : [],
+      }
+    })
   }
 
-  const openAdd = (parentId = null) => {
-    setAddParentId(parentId)
+  const openAdd = (parentNode = null) => {
+    const parentPath = parentNode ? 
+      (parentNode.parent_path ? `${parentNode.parent_path}/${parentNode.name}` : parentNode.name) 
+      : ''
+    setAddParentPath(parentPath)
     form.resetFields()
     setAddOpen(true)
   }
 
   const openEdit = (node) => {
     setEditingNode(node)
-    editForm.setFieldsValue({ title: node.title, doc_id: node.doc_id || undefined })
+    editForm.setFieldsValue({ 
+      name: node.name, 
+      mark: node.mark ? parseInt(node.mark, 10) : undefined 
+    })
     setEditOpen(true)
   }
 
   const handleAdd = async () => {
     try {
       const values = await form.validateFields()
-      await createNavNode({ title: values.title, parent_id: addParentId, doc_id: values.doc_id || null, sort_order: 0 })
+      await createNavNode({ 
+        name: values.name, 
+        parent_path: addParentPath, 
+        mark: values.mark ? String(values.mark) : '' 
+      })
       message.success('节点已添加')
       setAddOpen(false)
       fetchData()
@@ -127,7 +141,10 @@ export default function NavEditor({ currentUser }) {
   const handleEdit = async () => {
     try {
       const values = await editForm.validateFields()
-      await updateNavNode(editingNode.id, { title: values.title, doc_id: values.doc_id || null })
+      await updateNavNode(editingNode.id, { 
+        name: values.name, 
+        mark: values.mark ? String(values.mark) : '' 
+      })
       message.success('节点已更新')
       setEditOpen(false)
       fetchData()
@@ -142,7 +159,7 @@ export default function NavEditor({ currentUser }) {
       message.success('节点已删除')
       fetchData()
     } catch (e) {
-      message.error(e.response?.data?.detail || '删除失败')
+      message.error(e.response.data?.detail || '删除失败')
     }
   }
 
@@ -173,13 +190,12 @@ export default function NavEditor({ currentUser }) {
 
   const handleSaveOrder = async () => {
     try {
-      const nodes = flattenTree(tree)
-      await batchUpdateNav(nodes)
-      message.success('菜单顺序已保存')
+      const result = await reorderNav(tree)
+      message.success(result?.message || '菜单顺序已保存')
       setHasChanges(false)
       fetchData()
     } catch (e) {
-      message.error('保存失败')
+      message.error(e.response?.data?.detail || '保存失败')
     }
   }
 
@@ -189,29 +205,22 @@ export default function NavEditor({ currentUser }) {
   const modalFormContent = (formInstance) => (
     <Form form={formInstance} layout="vertical" style={{ marginTop: 16 }}>
       <Form.Item
-        name="title"
-        label={<span style={{ fontWeight: 600, color: '#44403C' }}>节点标题</span>}
-        rules={[{ required: true, message: '请输入标题' }]}
+        name="name"
+        label={<span style={{ fontWeight: 600, color: '#44403C' }}>节点名称</span>}
+        rules={[{ required: true, message: '请输入名称' }]}
       >
-        <Input placeholder="输入菜单标题" style={{ borderRadius: 8, height: 40 }} autoFocus />
+        <Input placeholder="输入菜单名称" style={{ borderRadius: 8, height: 40 }} autoFocus />
       </Form.Item>
       <Form.Item
-        name="doc_id"
+        name="mark"
         label={<span style={{ fontWeight: 600, color: '#44403C' }}>关联文档 <span style={{ fontWeight: 400, color: '#A8A29E' }}>（不选则为分组）</span></span>}
       >
         <Select placeholder="选择文档（可选）" allowClear showSearch optionFilterProp="label" style={{ borderRadius: 8 }}>
           {docs.map((d) => (
-            <Select.Option key={d.id} value={d.id} label={d.title}>
+            <Select.Option key={d.id} value={d.id} label={d.name}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <FileTextOutlined style={{ color: '#0D9488', fontSize: 12 }} />
-                <span>{d.title}</span>
-                <span style={{
-                  marginLeft: 'auto', fontSize: 11, padding: '1px 6px', borderRadius: 4,
-                  background: d.status === 'published' ? '#F0FDF4' : '#F5F5F3',
-                  color: d.status === 'published' ? '#16A34A' : '#78716C',
-                }}>
-                  {d.status === 'published' ? '已发布' : '草稿'}
-                </span>
+                <span>{d.name}</span>
               </div>
             </Select.Option>
           ))}
@@ -280,7 +289,7 @@ export default function NavEditor({ currentUser }) {
       <Modal
         title={
           <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontWeight: 700, fontSize: 18, color: '#1C1917' }}>
-            {addParentId ? '添加子节点' : '添加节点'}
+            {addParentPath ? '添加子节点' : '添加节点'}
           </div>
         }
         open={addOpen}

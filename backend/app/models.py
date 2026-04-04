@@ -1,76 +1,99 @@
 from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime, timezone
-import uuid
+from sqlalchemy.ext.declarative import declarative_base
+import os
 
-from .database import Base
-
-
-def gen_id():
-    return str(uuid.uuid4())
+Base = declarative_base()
 
 
-def utcnow():
-    return datetime.now(timezone.utc)
-
+# ============ 兼容现有 MySQL 表结构 ============
 
 class User(Base):
-    __tablename__ = "users"
+    """用户表 - 对应现有 user 表"""
+    __tablename__ = "user"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    username = Column(String(50), unique=True, nullable=False)
-    display_name = Column(String(100), nullable=False)
-    password_hash = Column(String(200), nullable=True)
-    role = Column(String(20), default="editor")  # admin / editor / viewer
-    created_at = Column(DateTime, default=utcnow)
-
-
-class Document(Base):
-    __tablename__ = "documents"
-
-    id = Column(String, primary_key=True, default=gen_id)
-    title = Column(String(200), nullable=False)
-    content = Column(Text, default="")
-    status = Column(String(20), default="draft")  # draft / published / archived
-    created_by = Column(String, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-    # 编辑锁
-    locked_by = Column(String, ForeignKey("users.id"), nullable=True)
-    locked_at = Column(DateTime, nullable=True)
-
-    creator = relationship("User", foreign_keys=[created_by])
-    locker = relationship("User", foreign_keys=[locked_by])
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(20), nullable=False, unique=True)
+    password = Column(String(40), nullable=False)  # 现有系统使用明文或简单加密
+    create_time = Column(String(32), nullable=True)
+    role = Column(String(32), nullable=True, default="user")
 
 
-class NavNode(Base):
-    __tablename__ = "nav_nodes"
+class WikiList(Base):
+    """文档列表表 - 对应现有 wiki_list 表"""
+    __tablename__ = "wiki_list"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    title = Column(String(200), nullable=False)
-    parent_id = Column(String, ForeignKey("nav_nodes.id"), nullable=True)
-    doc_id = Column(String, ForeignKey("documents.id"), nullable=True)  # null = group node
-    sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=utcnow)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(64), nullable=True)
+    path = Column(String(256), nullable=True)
+    description = Column(String(256), nullable=False, default="")
+    author = Column(String(32), nullable=True)
+    create_time = Column(String(32), nullable=True)
+    status = Column(Integer, nullable=False, default=0)
+    current_editor = Column(String(32), nullable=False, default="")
 
-    children = relationship(
-        "NavNode",
-        backref=backref("parent_ref", remote_side="NavNode.id"),
-        foreign_keys=[parent_id],
-        order_by="NavNode.sort_order",
-    )
-    document = relationship("Document")
+    # 关联文件内容
+    files = relationship("WikiFile", backref="wiki_list", foreign_keys="WikiFile.list_id")
 
+
+class WikiFile(Base):
+    """文件内容表 - 对应现有 wiki_file 表"""
+    __tablename__ = "wiki_file"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    list_id = Column(Integer, ForeignKey("wiki_list.id"), nullable=False)
+    content = Column(Text, nullable=True)
+    modifier = Column(String(32), nullable=True)
+    modified_time = Column(String(32), nullable=True)
+    mark = Column(Text, nullable=True)
+
+
+class TypeList(Base):
+    """分类/导航表 - 对应现有 type_list 表"""
+    __tablename__ = "type_list"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(256), nullable=True)
+    parent_path = Column(String(1024), nullable=True)
+    mark = Column(Text, nullable=True)
+    status = Column(Integer, nullable=False, default=0)
+
+
+# ============ 新增扩展表（用于新功能）============
+# 这些表在 MySQL 中不存在时会自动创建
 
 class PublishLog(Base):
+    """发布日志表 - 新增"""
     __tablename__ = "publish_logs"
 
-    id = Column(String, primary_key=True, default=gen_id)
-    published_by = Column(String, ForeignKey("users.id"), nullable=True)
-    published_at = Column(DateTime, default=utcnow)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    published_by = Column(String(50), nullable=True)
+    published_at = Column(DateTime, default=datetime.now)
     doc_count = Column(Integer, default=0)
-    status = Column(String(20), default="success")  # success / failed
+    status = Column(String(20), default="success")
     message = Column(Text, default="")
 
-    publisher = relationship("User")
+
+class DocumentLock(Base):
+    """文档锁表 - 新增，用于编辑锁定功能"""
+    __tablename__ = "document_locks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    doc_id = Column(Integer, ForeignKey("wiki_list.id"), nullable=False)
+    locked_by = Column(String(50), nullable=True)
+    locked_at = Column(DateTime, default=datetime.now)
+    session_id = Column(String(100), nullable=True)  # 用于自动释放
+
+
+class DocumentHistory(Base):
+    """文档历史版本表 - 新增"""
+    __tablename__ = "document_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    doc_id = Column(Integer, ForeignKey("wiki_list.id"), nullable=False)
+    content = Column(Text, nullable=True)
+    modifier = Column(String(50), nullable=True)
+    modified_at = Column(DateTime, default=datetime.now)
+    version = Column(Integer, default=1)
+    change_note = Column(String(500), nullable=True)

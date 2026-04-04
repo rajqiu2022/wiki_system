@@ -7,15 +7,13 @@ import {
   EyeOutlined, FileTextOutlined,
 } from '@ant-design/icons'
 import MDEditor from '@uiw/react-md-editor'
-import { getDoc, updateDoc, lockDoc, unlockDoc } from '../api'
+import { getDoc, updateDoc, updateDocContent, lockDoc, unlockDoc, uploadImage } from '../api'
 
 const { Text } = Typography
 
 const STATUS_OPTIONS = [
-  { key: 'published', label: '已发布', color: '#16A34A', bg: '#F0FDF4' },
-  { key: 'pending',   label: '待发布', color: '#2563EB', bg: '#EFF6FF' },
-  { key: 'draft',     label: '修改中', color: '#D97706', bg: '#FFF7ED' },
-  { key: 'archived',  label: '废弃',   color: '#78716C', bg: '#F5F5F5' },
+  { key: 0, label: '正常', color: '#16A34A', bg: '#F0FDF4' },
+  { key: 1, label: '已删除', color: '#78716C', bg: '#F5F5F5' },
 ]
 
 export default function DocEditor({ currentUser }) {
@@ -29,6 +27,7 @@ export default function DocEditor({ currentUser }) {
   const [isLocked, setIsLocked] = useState(false)
   const [lockedByMe, setLockedByMe] = useState(false)
   const lockInterval = useRef(null)
+  const editorRef = useRef(null)
   const userId = currentUser?.id
 
   const fetchDoc = useCallback(async () => {
@@ -36,14 +35,14 @@ export default function DocEditor({ currentUser }) {
     try {
       const data = await getDoc(id)
       setDoc(data)
-      setTitle(data.title)
+      setTitle(data.name || '')
       setContent(data.content || '')
-      setIsLocked(!!data.locked_by)
-      setLockedByMe(data.locked_by === userId)
+      setIsLocked(!!data.current_editor)
+      setLockedByMe(data.current_editor === currentUser?.username)
     } finally {
       setLoading(false)
     }
-  }, [id, userId])
+  }, [id, currentUser])
 
   useEffect(() => {
     fetchDoc()
@@ -80,15 +79,15 @@ export default function DocEditor({ currentUser }) {
     if (!lockedByMe) { message.warning('请先锁定文档'); return }
     setSaving(true)
     try {
-      await updateDoc(id, { title, content }, userId)
-      // 已发布文档修改后变为待发布
-      if (doc.status === 'published') {
-        await updateDoc(id, { status: 'pending' }, userId)
-        setDoc((d) => ({ ...d, status: 'pending' }))
-        message.success('保存成功，已变为待发布状态')
-      } else {
-        message.success('保存成功')
+      // 保存标题
+      if (title !== doc.name) {
+        await updateDoc(id, { name: title }, userId)
       }
+      // 保存内容
+      await updateDocContent(id, { content, modifier: currentUser?.username })
+      message.success('保存成功')
+      // 更新本地状态
+      setDoc((d) => ({ ...d, name: title, content }))
     } catch (e) {
       message.error(e.response?.data?.detail || '保存失败')
     } finally {
@@ -98,9 +97,9 @@ export default function DocEditor({ currentUser }) {
 
   const handleStatusChange = async ({ key }) => {
     try {
-      await updateDoc(id, { status: key }, userId)
-      setDoc((d) => ({ ...d, status: key }))
-      const label = STATUS_OPTIONS.find((s) => s.key === key)?.label
+      await updateDoc(id, { status: parseInt(key, 10) }, userId)
+      setDoc((d) => ({ ...d, status: parseInt(key, 10) }))
+      const label = STATUS_OPTIONS.find((s) => s.key === parseInt(key, 10))?.label
       message.success(`状态已更新为「${label}」`)
     } catch (e) {
       message.error(e.response?.data?.detail || '更新状态失败')
@@ -184,7 +183,7 @@ export default function DocEditor({ currentUser }) {
               {title || '未命名文档'}
             </div>
             <div style={{ fontSize: 11, color: '#A8A29E', marginTop: 1 }}>
-              {doc?.creator_name ? `${doc.creator_name} · 创建` : ''}
+              {doc?.author ? `${doc.author} · 创建` : ''}
             </div>
           </div>
         </div>
@@ -204,7 +203,7 @@ export default function DocEditor({ currentUser }) {
               background: '#FFFBEB', color: '#D97706',
             }}>
               <LockOutlined style={{ fontSize: 10 }} />
-              {doc?.locker_name || '他人'} 编辑中
+              {doc?.current_editor || '他人'} 编辑中
             </span>
           )}
           {lockedByMe && (
@@ -306,7 +305,59 @@ export default function DocEditor({ currentUser }) {
       </div>
 
       {/* Editor */}
-      <div style={{ flex: 1, minHeight: 0, borderRadius: 12, overflow: 'hidden' }}>
+      <div
+        style={{ flex: 1, minHeight: 0, borderRadius: 12, overflow: 'hidden' }}
+        onPaste={async (e) => {
+          if (!canEdit) return
+          const items = e.clipboardData?.items
+          if (!items) return
+          for (const item of items) {
+            if (item.type.startsWith('image/')) {
+              e.preventDefault()
+              const file = item.getAsFile()
+              if (!file) return
+              message.loading({ content: '正在上传图片...', key: 'img-upload' })
+              try {
+                const result = await uploadImage(file)
+                const imgMarkdown = `![image](${result.url})`
+                // Insert at cursor position via textarea
+                const textarea = editorRef.current?.querySelector('textarea')
+                if (textarea) {
+                  const start = textarea.selectionStart
+                  const end = textarea.selectionEnd
+                  const newContent = content.substring(0, start) + imgMarkdown + content.substring(end)
+                  setContent(newContent)
+                } else {
+                  setContent((prev) => prev + '\n' + imgMarkdown)
+                }
+                message.success({ content: '图片上传成功', key: 'img-upload' })
+              } catch (err) {
+                message.error({ content: err.response?.data?.detail || '图片上传失败', key: 'img-upload' })
+              }
+              return
+            }
+          }
+        }}
+        onDrop={async (e) => {
+          if (!canEdit) return
+          const files = e.dataTransfer?.files
+          if (!files || files.length === 0) return
+          const file = files[0]
+          if (!file.type.startsWith('image/')) return
+          e.preventDefault()
+          message.loading({ content: '正在上传图片...', key: 'img-upload' })
+          try {
+            const result = await uploadImage(file)
+            const imgMarkdown = `![image](${result.url})`
+            setContent((prev) => prev + '\n' + imgMarkdown)
+            message.success({ content: '图片上传成功', key: 'img-upload' })
+          } catch (err) {
+            message.error({ content: err.response?.data?.detail || '图片上传失败', key: 'img-upload' })
+          }
+        }}
+        onDragOver={(e) => { if (canEdit) e.preventDefault() }}
+        ref={editorRef}
+      >
         <div data-color-mode="light" style={{ height: '100%' }}>
           <MDEditor
             value={content}

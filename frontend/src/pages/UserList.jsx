@@ -2,14 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Table, Button, Input, Modal, Form, Select, Space, message, Popconfirm, Typography, Avatar } from 'antd'
 import { PlusOutlined, SearchOutlined, DeleteOutlined, UserOutlined } from '@ant-design/icons'
 import { getUsersPaged, createUser, deleteUser } from '../api'
-import dayjs from 'dayjs'
 
 const { Text } = Typography
 
 const ROLE_CONFIG = {
   admin: { color: '#DC2626', bg: '#FEF2F2', label: '管理员' },
-  editor: { color: '#0D9488', bg: '#CCFBF1', label: '编辑者' },
-  viewer: { color: '#78716C', bg: '#F5F5F3', label: '查看者' },
+  user: { color: '#0D9488', bg: '#CCFBF1', label: '用户' },
+  manager: { color: '#D97706', bg: '#FFF7ED', label: '经理' },
 }
 
 function getInitials(name = '') {
@@ -89,11 +88,10 @@ export default function UserList({ currentUser }) {
             size={38}
             style={{ background: getAvatarColor(record.username), fontSize: 13, fontWeight: 700, fontFamily: "'DM Sans', sans-serif" }}
           >
-            {getInitials(record.display_name)}
+            {getInitials(record.username)}
           </Avatar>
           <div>
-            <div style={{ fontWeight: 600, color: '#1C1917', fontSize: 14 }}>{record.display_name}</div>
-            <div style={{ fontSize: 12, color: '#A8A29E' }}>@{record.username}</div>
+            <div style={{ fontWeight: 600, color: '#1C1917', fontSize: 14 }}>{record.username}</div>
           </div>
         </div>
       ),
@@ -103,7 +101,7 @@ export default function UserList({ currentUser }) {
       dataIndex: 'role',
       width: 110,
       render: (role) => {
-        const conf = ROLE_CONFIG[role] || ROLE_CONFIG.viewer
+        const conf = ROLE_CONFIG[role] || ROLE_CONFIG.user
         return (
           <span style={{
             display: 'inline-flex', alignItems: 'center',
@@ -117,12 +115,12 @@ export default function UserList({ currentUser }) {
       },
     },
     {
-      title: '注册时间',
-      dataIndex: 'created_at',
+      title: '创建时间',
+      dataIndex: 'create_time',
       width: 160,
       render: (t) => (
         <span style={{ color: '#A8A29E', fontSize: 13 }}>
-          {dayjs(t).format('YYYY-MM-DD HH:mm')}
+          {t || '-'}
         </span>
       ),
     },
@@ -151,9 +149,6 @@ export default function UserList({ currentUser }) {
         ),
     }] : []),
   ]
-
-  const adminCount = data.items.filter(u => u.role === 'admin').length
-  const editorCount = data.items.filter(u => u.role === 'editor').length
 
   return (
     <div className="fade-in" style={{ flex: 1 }}>
@@ -226,20 +221,13 @@ export default function UserList({ currentUser }) {
         okButtonProps={{ style: { background: '#0D9488', borderColor: '#0D9488', borderRadius: 8 } }}
         cancelButtonProps={{ style: { borderRadius: 8 } }}
       >
-        <Form form={form} layout="vertical" initialValues={{ role: 'editor' }} style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" initialValues={{ role: 'user' }} style={{ marginTop: 16 }}>
           <Form.Item
             name="username"
             label={<span style={{ fontWeight: 600, color: '#44403C' }}>用户名</span>}
             rules={[{ required: true, message: '请输入用户名' }]}
           >
             <Input placeholder="英文用户名（登录用）" style={{ borderRadius: 8, height: 40 }} />
-          </Form.Item>
-          <Form.Item
-            name="display_name"
-            label={<span style={{ fontWeight: 600, color: '#44403C' }}>显示名称</span>}
-            rules={[{ required: true, message: '请输入显示名称' }]}
-          >
-            <Input placeholder="界面显示的名称" style={{ borderRadius: 8, height: 40 }} />
           </Form.Item>
           <Form.Item
             name="password"
@@ -254,8 +242,8 @@ export default function UserList({ currentUser }) {
           >
             <Select style={{ borderRadius: 8 }}>
               <Select.Option value="admin">管理员 — 全部权限</Select.Option>
-              <Select.Option value="editor">编辑者 — 可编辑文档</Select.Option>
-              <Select.Option value="viewer">查看者 — 只读权限</Select.Option>
+              <Select.Option value="user">用户 — 可编辑文档</Select.Option>
+              <Select.Option value="manager">经理 — 管理权限</Select.Option>
             </Select>
           </Form.Item>
         </Form>

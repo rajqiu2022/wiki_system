@@ -1,10 +1,34 @@
 version: '3.8'
 
 services:
-  wiki:
+  wiki-editor:
     build: .
+    container_name: wiki-editor
+    restart: always
     ports:
-      - "8001:8001"
+      - "3000:8001"
     environment:
       - TZ=Asia/Shanghai
-    restart: unless-stopped
+      - USE_MYSQL=true
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_USER=makerfabs_wiki
+      - MYSQL_PASSWORD=aJD*Hg6D!f88GD
+      - MYSQL_DATABASE=makerfabs_wiki
+    volumes:
+      - wiki-docs:/app/docs
+      - wiki-output:/app/output
+      - wiki-uploads:/app/uploads
+      - /var/www/html/makerfabs/wiki/mkdoc/wiki:/app/mkdocs-site
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - makerfabs_default
+
+networks:
+  makerfabs_default:
+    external: true
+
+volumes:
+  wiki-docs:
+  wiki-output:
+  wiki-uploads:

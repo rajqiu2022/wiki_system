@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Button, Input, Select, Modal, Form, message, Tooltip, Empty, Spin,
@@ -6,39 +6,64 @@ import {
 import {
   PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined,
   FileTextOutlined, FolderOutlined, FolderOpenOutlined,
-  ReloadOutlined, RightOutlined,
+  ReloadOutlined, RightOutlined, DisconnectOutlined,
+  EyeOutlined, ArrowLeftOutlined,
 } from '@ant-design/icons'
-import { getDocs, getNavTree, createDoc, deleteDoc, updateDoc } from '../api'
+import MDEditor from '@uiw/react-md-editor'
+import { getDocs, getNavTree, createDoc, deleteDoc, updateDoc, getDoc } from '../api'
+import { TreeSelect } from 'antd'
 
+// Status config: 0=normal, 1=deleted, 4=editing
 const STATUS_CONFIG = {
-  published: { color: '#16A34A', bg: '#F0FDF4', label: '已发布' },
-  pending:   { color: '#2563EB', bg: '#EFF6FF', label: '待发布' },
-  draft:      { color: '#D97706', bg: '#FFF7ED', label: '修改中' },
-  archived:   { color: '#78716C', bg: '#F5F5F5', label: '废弃' },
+  0: { color: '#16A34A', bg: '#F0FDF4', label: '正常' },
+  1: { color: '#9CA3AF', bg: '#F5F5F5', label: '已删除' },
+  2: { color: '#9CA3AF', bg: '#F5F5F5', label: '未知' },
+  3: { color: '#D97706', bg: '#FFFBEB', label: '修改中' },
+  4: { color: '#D97706', bg: '#FFFBEB', label: '修改中' },
 }
 
-// 列表中可选的所有状态
 const LIST_STATUS_OPTIONS = [
-  { value: 'published', label: '已发布' },
-  { value: 'pending',   label: '待发布' },
-  { value: 'draft',     label: '修改中' },
-  { value: 'archived',  label: '废弃' },
+  { value: 0, label: '正常' },
+  { value: 1, label: '已删除' },
+  { value: 4, label: '修改中' },
 ]
+
+// Normalize status value to integer (DB may store as string)
+function normalizeStatus(val) {
+  if (val === null || val === undefined) return 0
+  const n = Number(val)
+  return isNaN(n) ? 0 : n
+}
 
 function formatTime(t) {
   if (!t) return '-'
-  const d = new Date(t + (t.endsWith('Z') ? '' : 'Z'))
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return t
 }
 
-// 递归收集节点及其所有子节点的 doc_id
+// Legacy docs base path (kept for new doc creation path selection)
+const LEGACY_DOCS_BASE = '/var/www/html/wiki.makerfabs.com/mkdoc/wiki/docs/'
+
+// Collect all doc IDs (mark field) from a directory node and its descendants
 function collectDocIds(node) {
-  const ids = node.doc_id ? [node.doc_id] : []
+  const ids = []
+  if (node.mark) {
+    const docId = parseInt(node.mark, 10)
+    if (!isNaN(docId)) ids.push(docId)
+  }
   if (node.children && node.children.length > 0) {
     node.children.forEach((c) => ids.push(...collectDocIds(c)))
   }
   return ids
+}
+
+// Find a node by id in the tree
+function findNodeById(nodes, id) {
+  for (const n of nodes) {
+    if (n.id === id) return n
+    const found = findNodeById(n.children || [], id)
+    if (found) return found
+  }
+  return null
 }
 
 // 树节点组件
@@ -46,14 +71,27 @@ function TreeNode({ node, depth, selectedId, onSelect, expandedKeys, onToggle })
   const hasChildren = node.children && node.children.length > 0
   const isExpanded = expandedKeys.has(node.id)
   const isSelected = selectedId === node.id
-  const isDoc = !!node.doc_id
+  const isLinkedDoc = !!node.mark // mark non-empty = linked document
+  const isUnlinkedDoc = !node.mark && !hasChildren && !!node.file_ref // leaf without mark but has file_ref
+  const isDoc = isLinkedDoc || isUnlinkedDoc
 
   return (
     <div>
+      <Tooltip title={isUnlinkedDoc ? '未关联文档，无法编辑' : null} placement="right">
       <div
         onClick={() => {
-          if (hasChildren) onToggle(node.id)
-          onSelect(node.id)
+          if (isUnlinkedDoc) {
+            // Unlinked doc: do nothing (no doc_id to navigate to)
+          } else if (hasChildren) {
+            // Directory node: toggle expand and select for filtering
+            onToggle(node.id)
+            onSelect(node.id, null)
+          } else if (isLinkedDoc && node.mark) {
+            // Linked doc node: show read-only preview
+            onSelect(node.id, node.mark)
+          } else {
+            onSelect(node.id, null)
+          }
         }}
         style={{
           display: 'flex',
@@ -61,20 +99,21 @@ function TreeNode({ node, depth, selectedId, onSelect, expandedKeys, onToggle })
           gap: 6,
           padding: '6px 12px',
           paddingLeft: 12 + depth * 18,
-          cursor: 'pointer',
+          cursor: isUnlinkedDoc ? 'not-allowed' : 'pointer',
           borderRadius: 6,
           background: isSelected ? '#E0F2F1' : 'transparent',
-          color: isSelected ? '#0D9488' : '#44403C',
+          color: isUnlinkedDoc ? '#C4B5A4' : (isSelected ? '#0D9488' : '#44403C'),
           fontSize: 13,
           fontWeight: isSelected ? 600 : 400,
+          opacity: isUnlinkedDoc ? 0.7 : 1,
           transition: 'all 0.12s',
           userSelect: 'none',
         }}
         onMouseEnter={(e) => {
-          if (!isSelected) e.currentTarget.style.background = '#F5F5F3'
+          if (!isSelected && !isUnlinkedDoc) e.currentTarget.style.background = '#F5F5F3'
         }}
         onMouseLeave={(e) => {
-          if (!isSelected) e.currentTarget.style.background = 'transparent'
+          if (!isSelected && !isUnlinkedDoc) e.currentTarget.style.background = 'transparent'
         }}
       >
         {hasChildren ? (
@@ -89,7 +128,9 @@ function TreeNode({ node, depth, selectedId, onSelect, expandedKeys, onToggle })
         ) : (
           <span style={{ width: 10, display: 'inline-block', flexShrink: 0 }} />
         )}
-        {isDoc ? (
+        {isUnlinkedDoc ? (
+          <DisconnectOutlined style={{ fontSize: 13, flexShrink: 0, color: '#C4B5A4' }} />
+        ) : isDoc ? (
           <FileTextOutlined style={{ fontSize: 13, flexShrink: 0, color: '#57534E' }} />
         ) : (
           isExpanded
@@ -102,9 +143,10 @@ function TreeNode({ node, depth, selectedId, onSelect, expandedKeys, onToggle })
           whiteSpace: 'nowrap',
           flex: 1,
         }}>
-          {node.title}
+          {node.name}
         </span>
       </div>
+      </Tooltip>
       {hasChildren && isExpanded && (
         <div>
           {node.children.map((child) => (
@@ -138,18 +180,42 @@ export default function DocList({ currentUser }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null)
   const [expandedKeys, setExpandedKeys] = useState(new Set())
 
-  const fetchDocs = async () => {
+  // Article preview state: when a leaf doc node is selected, show its content
+  const [previewDoc, setPreviewDoc] = useState(null) // { id, name, content }
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  // fetchDocs: supports doc_ids parameter for directory filtering
+  const fetchDocs = useCallback(async (docIds) => {
     setLoading(true)
     try {
       const params = {}
-      if (filters.status) params.status = filters.status
+      if (filters.status !== undefined) params.status = filters.status
       if (filters.keyword) params.keyword = filters.keyword
+      if (docIds && docIds.length > 0) params.doc_ids = docIds.join(',')
       const data = await getDocs(params)
       setDocs(data)
     } finally {
       setLoading(false)
     }
-  }
+  }, [filters.status, filters.keyword])
+
+  // 初始化加载
+  useEffect(() => { fetchDocs(null) }, [fetchDocs])
+
+  // Collect doc IDs for the selected directory node
+  const selectedDocIds = useMemo(() => {
+    if (!selectedNodeId) return null
+    const node = findNodeById(navTree, selectedNodeId)
+    if (!node) return null
+    // Collect all doc IDs under this directory node
+    const ids = collectDocIds(node)
+    return ids.length > 0 ? ids : [-1] // -1 means "no docs" so we get empty result
+  }, [navTree, selectedNodeId])
+
+  // Reload docs when selected directory changes
+  useEffect(() => {
+    fetchDocs(selectedDocIds)
+  }, [selectedDocIds, fetchDocs])
 
   const fetchNav = async () => {
     setNavLoading(true)
@@ -163,36 +229,20 @@ export default function DocList({ currentUser }) {
     }
   }
 
-  useEffect(() => { fetchDocs(); fetchNav() }, [])
+  useEffect(() => { fetchNav() }, [])
 
-  // navTree 已经是后端返回的树形结构，直接使用
-  // 根据选中节点过滤文档
-  const filteredDocs = useMemo(() => {
-    if (!selectedNodeId) return docs
-    const findNode = (nodes, id) => {
-      for (const n of nodes) {
-        if (n.id === id) return n
-        const found = findNode(n.children || [], id)
-        if (found) return found
-      }
-      return null
-    }
-    const node = findNode(navTree, selectedNodeId)
-    if (!node) return docs
-
-    const docIds = new Set(collectDocIds(node))
-    return docs.filter((d) => docIds.has(d.id))
-  }, [docs, navTree, selectedNodeId])
+  // 不再需要前端过滤，直接用选中目录获取文章
+  const filteredDocs = docs
 
   // 搜索过滤
   const displayDocs = useMemo(() => {
     let result = filteredDocs
     if (filters.keyword) {
       const kw = filters.keyword.toLowerCase()
-      result = result.filter((d) => d.title.toLowerCase().includes(kw))
+      result = result.filter((d) => (d.name || '').toLowerCase().includes(kw))
     }
-    if (filters.status) {
-      result = result.filter((d) => d.status === filters.status)
+    if (filters.status !== undefined) {
+      result = result.filter((d) => normalizeStatus(d.status) === filters.status)
     }
     return result
   }, [filteredDocs, filters.keyword, filters.status])
@@ -206,15 +256,96 @@ export default function DocList({ currentUser }) {
     })
   }
 
-  const handleNodeSelect = (nodeId) => {
-    setSelectedNodeId((prev) => prev === nodeId ? null : nodeId)
-  }
+  // Handle node selection: directory nodes show doc list, article nodes show preview
+  const handleNodeSelect = useCallback(async (nodeId, docMark) => {
+    if (docMark) {
+      // Article node: load and show read-only preview
+      setSelectedNodeId(nodeId)
+      setPreviewLoading(true)
+      try {
+        const data = await getDoc(docMark)
+        setPreviewDoc({ id: data.id, name: data.name, content: data.content || '' })
+      } catch {
+        setPreviewDoc(null)
+        message.error('加载文档内容失败')
+      } finally {
+        setPreviewLoading(false)
+      }
+    } else {
+      // Directory node: clear preview, show doc list
+      setSelectedNodeId((prev) => prev === nodeId ? null : nodeId)
+      setPreviewDoc(null)
+    }
+  }, [])
+
+  // Locate a doc in the tree by doc_id (mark field): expand all ancestors, select the node, and show preview
+  const locateDocInTree = useCallback(async (docId) => {
+    const docIdStr = String(docId)
+    // Find the node with matching mark and collect ancestor ids to expand
+    const findAndCollectPath = (nodes, ancestors = []) => {
+      for (const node of nodes) {
+        if (node.mark === docIdStr) {
+          return { node, ancestors }
+        }
+        if (node.children && node.children.length > 0) {
+          const result = findAndCollectPath(node.children, [...ancestors, node.id])
+          if (result) return result
+        }
+      }
+      return null
+    }
+    const result = findAndCollectPath(navTree)
+    if (result) {
+      // Expand all ancestor nodes
+      setExpandedKeys((prev) => {
+        const next = new Set(prev)
+        result.ancestors.forEach((id) => next.add(id))
+        return next
+      })
+      // Select the found node and load preview
+      setSelectedNodeId(result.node.id)
+      setPreviewLoading(true)
+      try {
+        const data = await getDoc(docId)
+        setPreviewDoc({ id: data.id, name: data.name, content: data.content || '' })
+      } catch {
+        setPreviewDoc(null)
+      } finally {
+        setPreviewLoading(false)
+      }
+    }
+  }, [navTree])
+
+  // Build tree select data from navTree for directory path selection
+  const dirTreeData = useMemo(() => {
+    const buildTreeSelectData = (nodes, parentPath = '') => {
+      return nodes.map((node) => {
+        const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name
+        const fullPath = LEGACY_DOCS_BASE + currentPath + '/'
+        const item = {
+          title: node.name,
+          value: fullPath,
+          key: node.id || currentPath,
+        }
+        if (node.children && node.children.length > 0) {
+          item.children = buildTreeSelectData(node.children, currentPath)
+        }
+        return item
+      })
+    }
+    return buildTreeSelectData(navTree)
+  }, [navTree])
 
   const handleCreate = async () => {
     if (!currentUser?.id) { message.error('请先登录'); return }
     try {
       const values = await form.validateFields()
-      await createDoc({ ...values, created_by: currentUser.id })
+      await createDoc({ 
+        name: values.title,
+        path: values.path || '',
+        description: values.description || '',
+        author: currentUser.username 
+      })
       message.success('文档创建成功')
       setCreateOpen(false)
       form.resetFields()
@@ -231,7 +362,7 @@ export default function DocList({ currentUser }) {
   const handleDelete = (doc) => {
     Modal.confirm({
       title: '删除文档',
-      content: `确定删除「${doc.title}」？此操作不可撤销。`,
+      content: `确定删除「${doc.name}」？此操作不可撤销。`,
       okText: '确认删除',
       okType: 'danger',
       cancelText: '取消',
@@ -251,14 +382,11 @@ export default function DocList({ currentUser }) {
     try {
       await updateDoc(doc.id, { status: newStatus }, currentUser?.id)
       message.success('状态已更新')
-      // 本地更新，不重新 fetch，保持排序
       setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, status: newStatus } : d))
     } catch {
       message.error('状态更新失败')
     }
   }
-
-  const publishedCount = docs.filter((d) => d.status === 'published').length
 
   return (
     <div className="fade-in" style={{ flex: 1, display: 'flex', gap: 20, minHeight: 0 }}>
@@ -285,7 +413,7 @@ export default function DocList({ currentUser }) {
             <Tooltip title="显示全部">
               <Button
                 type="text" size="small"
-                onClick={() => setSelectedNodeId(null)}
+                onClick={() => { setSelectedNodeId(null); setPreviewDoc(null) }}
                 style={{ fontSize: 12, color: '#0D9488', padding: '0 4px', height: 24 }}
               >
                 全部
@@ -302,7 +430,7 @@ export default function DocList({ currentUser }) {
             <>
               {/* "全部文档"入口 */}
               <div
-                onClick={() => setSelectedNodeId(null)}
+                onClick={() => { setSelectedNodeId(null); setPreviewDoc(null) }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '6px 12px', cursor: 'pointer', borderRadius: 6,
@@ -339,8 +467,87 @@ export default function DocList({ currentUser }) {
         </div>
       </div>
 
-      {/* 右侧文档列表 */}
+      {/* 右侧内容区域 */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {previewDoc || previewLoading ? (
+          /* ===== Article read-only preview mode ===== */
+          <>
+            {/* Preview top bar */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 16,
+            }}>
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={() => { setPreviewDoc(null); setSelectedNodeId(null) }}
+                style={{ borderRadius: 8, height: 36 }}
+              >
+                返回列表
+              </Button>
+              {previewDoc && (
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => navigate(`/docs/${previewDoc.id}`)}
+                  style={{
+                    height: 36, borderRadius: 8, fontWeight: 600,
+                    background: '#0D9488', border: 'none',
+                    boxShadow: '0 2px 8px rgba(13,148,136,0.25)',
+                  }}
+                >
+                  编辑文档
+                </Button>
+              )}
+            </div>
+            {/* Preview content */}
+            <div style={{
+              flex: 1, background: '#FFFFFF', borderRadius: 12,
+              border: '1px solid #E7E5E4', overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              {previewLoading ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Spin />
+                </div>
+              ) : previewDoc ? (
+                <>
+                  {/* Title bar */}
+                  <div style={{
+                    padding: '16px 24px', borderBottom: '1px solid #F0EDEA',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <FileTextOutlined style={{ fontSize: 18, color: '#0D9488' }} />
+                    <span style={{
+                      fontSize: 18, fontWeight: 700, color: '#1C1917',
+                      fontFamily: "'Newsreader', Georgia, serif",
+                    }}>
+                      {previewDoc.name}
+                    </span>
+                    <span style={{
+                      marginLeft: 'auto', fontSize: 12, color: '#A8A29E',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      <EyeOutlined /> 只读预览
+                    </span>
+                  </div>
+                  {/* Markdown preview */}
+                  <div style={{ flex: 1, overflow: 'auto', padding: 0 }} data-color-mode="light">
+                    <MDEditor
+                      value={previewDoc.content}
+                      preview="preview"
+                      hideToolbar
+                      height="100%"
+                      visibleDragbar={false}
+                      style={{ border: 'none', boxShadow: 'none' }}
+                    />
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          /* ===== Document list mode ===== */
+          <>
         {/* 顶部工具栏 */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -429,11 +636,12 @@ export default function DocList({ currentUser }) {
               </div>
               {/* 行 */}
               {displayDocs.map((doc, idx) => {
-                const status = STATUS_CONFIG[doc.status] || STATUS_CONFIG.draft
+                const docStatus = normalizeStatus(doc.status)
+                const status = STATUS_CONFIG[docStatus] || STATUS_CONFIG[0]
                 return (
                   <div
                     key={doc.id}
-                    onClick={() => navigate(`/docs/${doc.id}`)}
+                    onClick={() => locateDocInTree(doc.id)}
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '1fr 100px 140px 120px 80px',
@@ -458,32 +666,59 @@ export default function DocList({ currentUser }) {
                         fontWeight: 500, fontSize: 13, color: '#1C1917',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
-                        {doc.title}
+                        {doc.name}
                       </span>
-                      {doc.locked_by && (
+                      {doc.current_editor && (
                         <span style={{ fontSize: 10, color: '#D97706', flexShrink: 0 }}>(锁定中)</span>
                       )}
                     </div>
-                    {/* 状态 - 点击可切换 */}
+                    {/* 状态 */}
                     <div onClick={(e) => e.stopPropagation()}>
                       <Select
                         size="small"
-                        value={doc.status}
+                        value={docStatus}
                         onChange={(v) => handleStatusChange(doc, v)}
-                        style={{ width: 84 }}
+                        style={{ width: 96 }}
                         bordered={false}
-                        dropdownStyle={{ minWidth: 100 }}
-                        options={LIST_STATUS_OPTIONS}
+                        dropdownStyle={{ minWidth: 110 }}
                         popupMatchSelectWidth={false}
+                        labelRender={({ value }) => {
+                          const cfg = STATUS_CONFIG[value] || STATUS_CONFIG[0]
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                              <span style={{
+                                width: 7, height: 7, borderRadius: '50%',
+                                background: cfg.color, display: 'inline-block', flexShrink: 0,
+                              }} />
+                              <span style={{ color: cfg.color, fontWeight: 500, fontSize: 12 }}>{cfg.label}</span>
+                            </span>
+                          )
+                        }}
+                        optionRender={(option) => {
+                          const cfg = STATUS_CONFIG[option.value] || STATUS_CONFIG[0]
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                width: 8, height: 8, borderRadius: '50%',
+                                background: cfg.color, display: 'inline-block', flexShrink: 0,
+                              }} />
+                              <span style={{ color: cfg.color }}>{cfg.label}</span>
+                            </div>
+                          )
+                        }}
+                        options={LIST_STATUS_OPTIONS.map(opt => {
+                          const cfg = STATUS_CONFIG[opt.value] || STATUS_CONFIG[0]
+                          return { ...opt, label: cfg.label }
+                        })}
                       />
                     </div>
                     {/* 修改时间 */}
                     <span style={{ fontSize: 12, color: '#78716C' }}>
-                      {formatTime(doc.updated_at)}
+                      {formatTime(doc.create_time)}
                     </span>
                     {/* 创建人 */}
                     <span style={{ fontSize: 12, color: '#78716C' }}>
-                      {doc.creator_name || '-'}
+                      {doc.author || '-'}
                     </span>
                     {/* 操作 */}
                     <div
@@ -513,6 +748,8 @@ export default function DocList({ currentUser }) {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* 新建文档弹窗 */}
@@ -536,6 +773,32 @@ export default function DocList({ currentUser }) {
               placeholder="输入文档标题"
               style={{ borderRadius: 8, height: 40, fontSize: 14 }}
               autoFocus
+            />
+          </Form.Item>
+          <Form.Item
+            name="path"
+            label="所属目录"
+            rules={[{ required: true, message: '请选择所属目录' }]}
+          >
+            <TreeSelect
+              treeData={dirTreeData}
+              placeholder="选择文档所属目录"
+              allowClear
+              showSearch
+              treeDefaultExpandAll
+              style={{ borderRadius: 8, height: 40, fontSize: 14 }}
+              dropdownStyle={{ maxHeight: 300, overflow: 'auto' }}
+              treeLine={{ showLeafIcon: false }}
+            />
+          </Form.Item>
+          <Form.Item
+            name="description"
+            label="文档描述"
+          >
+            <Input.TextArea
+              placeholder="输入文档描述（可选）"
+              rows={2}
+              style={{ borderRadius: 8, fontSize: 14 }}
             />
           </Form.Item>
         </Form>
