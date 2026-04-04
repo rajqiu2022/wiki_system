@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Spin, Tooltip, Badge } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Spin, Tooltip, Badge, Modal } from 'antd'
 import {
   FileTextOutlined,
   MenuOutlined,
@@ -65,6 +65,32 @@ export default function App() {
 
   const isAdmin = currentUser?.role === 'admin'
   const currentPath = '/' + (location.pathname.split('/')[1] || 'docs')
+
+  // Navigation guard: check for unsaved changes in DocEditor before navigating
+  const safeNavigate = (targetPath) => {
+    const editorState = window.__wikiEditorUnsaved
+    if (editorState && editorState.hasUnsavedChanges) {
+      Modal.confirm({
+        title: '未保存的修改',
+        content: '您有未保存的修改，确定要离开吗？离开后修改将丢失。',
+        okText: '保存并离开',
+        cancelText: '不保存，直接离开',
+        okButtonProps: { style: { borderRadius: 8, background: '#0D9488', border: 'none' } },
+        cancelButtonProps: { style: { borderRadius: 8 } },
+        onOk: async () => {
+          try { await editorState.handleSave() } catch {}
+          try { await editorState.handleUnlock() } catch {}
+          navigate(targetPath)
+        },
+        onCancel: async () => {
+          try { await editorState.handleUnlock() } catch {}
+          navigate(targetPath)
+        },
+      })
+    } else {
+      navigate(targetPath)
+    }
+  }
 
   const userMenuItems = [
     {
@@ -166,7 +192,7 @@ export default function App() {
             return (
               <Tooltip key={item.key} title={collapsed ? item.label : ''} placement="right">
                 <div
-                  onClick={() => navigate(item.key)}
+                  onClick={() => safeNavigate(item.key)}
                   style={{
                     height: 40, margin: collapsed ? '0 10px' : '0 12px', borderRadius: 8, cursor: 'pointer',
                     display: 'flex', alignItems: collapsed ? 'center' : 'center', justifyContent: collapsed ? 'center' : 'flex-start',
@@ -199,7 +225,7 @@ export default function App() {
           {isAdmin && (
             <Tooltip title={collapsed ? '用户' : ''} placement="right">
               <div
-                onClick={() => navigate('/users')}
+                onClick={() => safeNavigate('/users')}
                 style={{
                   height: 40, margin: collapsed ? '0 10px' : '0 12px', borderRadius: 8, cursor: 'pointer',
                   display: 'flex', alignItems: collapsed ? 'center' : 'center', justifyContent: collapsed ? 'center' : 'flex-start',

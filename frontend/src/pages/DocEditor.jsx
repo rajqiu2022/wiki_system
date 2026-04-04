@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useParams, useNavigate, useBlocker } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Button, Space, Tag, Input, message, Spin, Modal, Dropdown, Tooltip, Typography } from 'antd'
 import {
   SaveOutlined, ArrowLeftOutlined, LockOutlined, UnlockOutlined,
@@ -194,49 +194,24 @@ export default function DocEditor({ currentUser }) {
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasUnsavedChanges])
 
-  // Block route navigation when there are unsaved changes
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
-  )
-
+  // Expose unsaved state to window so App sidebar navigation can check it
   useEffect(() => {
-    if (blocker.state === 'blocked') {
-      Modal.confirm({
-        title: '未保存的修改',
-        content: '您有未保存的修改，确定要离开吗？离开后修改将丢失。',
-        okText: '保存并离开',
-        cancelText: '不保存，直接离开',
-        okButtonProps: { style: { borderRadius: 8, background: '#0D9488', border: 'none' } },
-        cancelButtonProps: { style: { borderRadius: 8 } },
-        onOk: async () => {
+    window.__wikiEditorUnsaved = {
+      hasUnsavedChanges,
+      handleSave: () => handleSave(),
+      handleUnlock: async () => {
+        if (lockedByMe) {
           try {
-            await handleSave()
+            await unlockDoc(id, userId)
+            if (lockInterval.current) clearInterval(lockInterval.current)
           } catch {}
-          if (lockedByMe) {
-            try {
-              await unlockDoc(id, userId)
-              if (lockInterval.current) clearInterval(lockInterval.current)
-            } catch {}
-          }
-          blocker.proceed()
-        },
-        onCancel: async () => {
-          if (lockedByMe) {
-            try {
-              await unlockDoc(id, userId)
-              if (lockInterval.current) clearInterval(lockInterval.current)
-            } catch {}
-          }
-          blocker.proceed()
-        },
-        afterClose: () => {
-          // If modal was closed via X button, reset the blocker
-          if (blocker.state === 'blocked') blocker.reset()
-        },
-      })
+        }
+      },
     }
-  }, [blocker.state])
+    return () => { delete window.__wikiEditorUnsaved }
+  }, [hasUnsavedChanges, lockedByMe, id, userId, title, content])
+
+
 
   if (loading) {
     return (
