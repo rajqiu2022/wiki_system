@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useParams, useNavigate, useBlocker } from 'react-router-dom'
 import { Button, Space, Tag, Input, message, Spin, Modal, Dropdown, Tooltip, Typography } from 'antd'
 import {
   SaveOutlined, ArrowLeftOutlined, LockOutlined, UnlockOutlined,
@@ -29,6 +29,15 @@ export default function DocEditor({ currentUser }) {
   const lockInterval = useRef(null)
   const editorRef = useRef(null)
   const userId = currentUser?.id
+  const [savedTitle, setSavedTitle] = useState('')
+  const [savedContent, setSavedContent] = useState('')
+  const [autoLockAttempted, setAutoLockAttempted] = useState(false)
+
+  // Track whether there are unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    if (!doc) return false
+    return title !== savedTitle || content !== savedContent
+  }, [doc, title, content, savedTitle, savedContent])
 
   const fetchDoc = useCallback(async () => {
     setLoading(true)
@@ -37,6 +46,8 @@ export default function DocEditor({ currentUser }) {
       setDoc(data)
       setTitle(data.name || '')
       setContent(data.content || '')
+      setSavedTitle(data.name || '')
+      setSavedContent(data.content || '')
       setIsLocked(!!data.current_editor)
       setLockedByMe(data.current_editor === currentUser?.username)
     } finally {
@@ -49,19 +60,27 @@ export default function DocEditor({ currentUser }) {
     return () => { if (lockInterval.current) clearInterval(lockInterval.current) }
   }, [fetchDoc])
 
-  const handleLock = async () => {
+  const handleLock = async (silent = false) => {
     try {
       await lockDoc(id, userId)
       setIsLocked(true)
       setLockedByMe(true)
-      message.success('已获取编辑锁')
+      if (!silent) message.success('已获取编辑锁')
       lockInterval.current = setInterval(async () => {
         try { await lockDoc(id, userId) } catch {}
       }, 10 * 60 * 1000)
     } catch (e) {
-      message.error(e.response?.data?.detail || '锁定失败')
+      if (!silent) message.error(e.response?.data?.detail || '锁定失败')
     }
   }
+
+  // Auto-lock: automatically acquire edit lock when entering the page
+  useEffect(() => {
+    if (!loading && doc && !autoLockAttempted && !isLocked && userId) {
+      setAutoLockAttempted(true)
+      handleLock(true)
+    }
+  }, [loading, doc, autoLockAttempted, isLocked, userId])
 
   const handleUnlock = async () => {
     try {
@@ -87,6 +106,8 @@ export default function DocEditor({ currentUser }) {
       await updateDocContent(id, { content, modifier: currentUser?.username })
       message.success('保存成功')
       // 更新本地状态
+      setSavedTitle(title)
+      setSavedContent(content)
       setDoc((d) => ({ ...d, name: title, content }))
     } catch (e) {
       message.error(e.response?.data?.detail || '保存失败')
@@ -107,7 +128,29 @@ export default function DocEditor({ currentUser }) {
   }
 
   const handleBack = () => {
-    if (lockedByMe) {
+    if (hasUnsavedChanges) {
+      Modal.confirm({
+        title: '未保存的修改',
+        content: '您有未保存的修改，确定要离开吗？离开后修改将丢失。',
+        okText: '保存并离开',
+        cancelText: '不保存，直接离开',
+        okButtonProps: { style: { borderRadius: 8, background: '#0D9488', border: 'none' } },
+        cancelButtonProps: { style: { borderRadius: 8 } },
+        onOk: async () => {
+          await handleSave()
+          await unlockDoc(id, userId)
+          if (lockInterval.current) clearInterval(lockInterval.current)
+          navigate('/docs')
+        },
+        onCancel: async () => {
+          if (lockedByMe) {
+            await unlockDoc(id, userId)
+            if (lockInterval.current) clearInterval(lockInterval.current)
+          }
+          navigate('/docs')
+        },
+      })
+    } else if (lockedByMe) {
       Modal.confirm({
         title: '离开编辑',
         content: '是否释放编辑锁后返回？',
@@ -138,6 +181,62 @@ export default function DocEditor({ currentUser }) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [lockedByMe, title, content, userId])
+
+  // Block browser close/refresh when there are unsaved changes
+  useEffect(() => {
+    const handler = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedChanges])
+
+  // Block route navigation when there are unsaved changes
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
+  )
+
+  useEffect(() => {
+    if (blocker.state === 'blocked') {
+      Modal.confirm({
+        title: '未保存的修改',
+        content: '您有未保存的修改，确定要离开吗？离开后修改将丢失。',
+        okText: '保存并离开',
+        cancelText: '不保存，直接离开',
+        okButtonProps: { style: { borderRadius: 8, background: '#0D9488', border: 'none' } },
+        cancelButtonProps: { style: { borderRadius: 8 } },
+        onOk: async () => {
+          try {
+            await handleSave()
+          } catch {}
+          if (lockedByMe) {
+            try {
+              await unlockDoc(id, userId)
+              if (lockInterval.current) clearInterval(lockInterval.current)
+            } catch {}
+          }
+          blocker.proceed()
+        },
+        onCancel: async () => {
+          if (lockedByMe) {
+            try {
+              await unlockDoc(id, userId)
+              if (lockInterval.current) clearInterval(lockInterval.current)
+            } catch {}
+          }
+          blocker.proceed()
+        },
+        afterClose: () => {
+          // If modal was closed via X button, reset the blocker
+          if (blocker.state === 'blocked') blocker.reset()
+        },
+      })
+    }
+  }, [blocker.state])
 
   if (loading) {
     return (
