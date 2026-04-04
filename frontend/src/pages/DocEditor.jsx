@@ -320,13 +320,19 @@ export default function DocEditor({ currentUser }) {
               try {
                 const result = await uploadImage(file)
                 const imgMarkdown = `![image](${result.url})`
-                // Insert at cursor position via textarea
+                // Insert via textarea's native input so Ctrl+Z undo works
                 const textarea = editorRef.current?.querySelector('textarea')
                 if (textarea) {
-                  const start = textarea.selectionStart
-                  const end = textarea.selectionEnd
-                  const newContent = content.substring(0, start) + imgMarkdown + content.substring(end)
-                  setContent(newContent)
+                  textarea.focus()
+                  // Use native InputEvent to keep undo stack intact
+                  const nativeInputEvent = new InputEvent('beforeinput', {
+                    inputType: 'insertText',
+                    data: imgMarkdown,
+                    bubbles: true,
+                    cancelable: true,
+                  })
+                  // Try execCommand first (widely supported for undo)
+                  document.execCommand('insertText', false, imgMarkdown)
                 } else {
                   setContent((prev) => prev + '\n' + imgMarkdown)
                 }
@@ -348,8 +354,16 @@ export default function DocEditor({ currentUser }) {
           message.loading({ content: '正在上传图片...', key: 'img-upload' })
           try {
             const result = await uploadImage(file)
-            const imgMarkdown = `![image](${result.url})`
-            setContent((prev) => prev + '\n' + imgMarkdown)
+            const imgMarkdown = `\n![image](${result.url})`
+            const textarea = editorRef.current?.querySelector('textarea')
+            if (textarea) {
+              textarea.focus()
+              // Move cursor to end for drop
+              textarea.selectionStart = textarea.selectionEnd = textarea.value.length
+              document.execCommand('insertText', false, imgMarkdown)
+            } else {
+              setContent((prev) => prev + imgMarkdown)
+            }
             message.success({ content: '图片上传成功', key: 'img-upload' })
           } catch (err) {
             message.error({ content: err.response?.data?.detail || '图片上传失败', key: 'img-upload' })
