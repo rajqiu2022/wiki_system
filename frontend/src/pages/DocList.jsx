@@ -304,15 +304,16 @@ export default function DocList({ currentUser }) {
       })
       // Select the found node and load preview
       setSelectedNodeId(result.node.id)
-      setPreviewLoading(true)
-      try {
-        const data = await getDoc(docId)
-        setPreviewDoc({ id: data.id, name: data.name, content: data.content || '' })
-      } catch {
-        setPreviewDoc(null)
-      } finally {
-        setPreviewLoading(false)
-      }
+    }
+    // Always load and show preview (even if not found in tree)
+    setPreviewLoading(true)
+    try {
+      const data = await getDoc(docId)
+      setPreviewDoc({ id: data.id, name: data.name, content: data.content || '' })
+    } catch {
+      setPreviewDoc(null)
+    } finally {
+      setPreviewLoading(false)
     }
   }, [navTree])
 
