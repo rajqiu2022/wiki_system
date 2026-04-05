@@ -97,7 +97,7 @@ export default function App() {
       key: 'profile',
       label: (
         <div style={{ padding: '4px 0', minWidth: 160 }}>
-          <div style={{ fontWeight: 600, color: '#1C1917', fontSize: 14 }}>{currentUser?.display_name}</div>
+          <div style={{ fontWeight: 600, color: '#1C1917', fontSize: 14 }}>{currentUser?.username}</div>
           <div style={{ fontSize: 12, color: '#78716C', marginTop: 2 }}>@{currentUser?.username}</div>
         </div>
       ),
@@ -107,7 +107,7 @@ export default function App() {
     ...(isAdmin ? [{
       key: 'preview',
       icon: <GlobalOutlined />,
-      label: <a href="/site/" target="_blank" rel="noopener noreferrer" style={{ color: '#44403C' }}>预览站点</a>,
+      label: <a href="https://wiki.makerfabs.com" target="_blank" rel="noopener noreferrer" style={{ color: '#44403C' }}>预览站点</a>,
     }] : []),
     {
       key: 'logout',
@@ -290,9 +290,9 @@ export default function App() {
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <Avatar size={24} style={{ background: '#0D9488', fontSize: 10, fontWeight: 700, flexShrink: 0, fontFamily: "'DM Sans', sans-serif" }}>
-                {getInitials(currentUser.display_name)}
+                {getInitials(currentUser.username)}
               </Avatar>
-              {!collapsed && <span style={{ fontSize: 13, color: '#E7E5E4', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser.display_name}</span>}
+              {!collapsed && <span style={{ fontSize: 13, color: '#E7E5E4', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser.username}</span>}
             </div>
           </Dropdown>
         </div>
@@ -336,9 +336,9 @@ export default function App() {
                   size={28}
                   style={{ background: '#0D9488', fontSize: 11, fontWeight: 700, fontFamily: "'DM Sans', sans-serif" }}
                 >
-                  {getInitials(currentUser.display_name)}
+                  {getInitials(currentUser.username)}
                 </Avatar>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#44403C' }}>{currentUser.display_name}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#44403C' }}>{currentUser.username}</span>
               </div>
             </Dropdown>
           </div>

@@ -163,7 +163,7 @@ export default function PublishPage({ currentUser }) {
         <Space>
           <Button
             icon={<GlobalOutlined />}
-            href="/site/"
+            href="https://wiki.makerfabs.com"
             target="_blank"
             style={{ borderRadius: 8 }}
           >
