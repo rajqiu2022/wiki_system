@@ -1,9 +1,8 @@
 import React, { useState } from 'react'
-import { Form, Input, Button, Typography } from 'antd'
+import { Form, Input, Button } from 'antd'
 import { UserOutlined, LockOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import { login } from '../api'
 
-const { Text, Title } = Typography
 
 export default function LoginPage({ onLogin }) {
   const [loading, setLoading] = useState(false)
@@ -186,25 +185,7 @@ export default function LoginPage({ onLogin }) {
             </Form.Item>
           </Form>
 
-          {/* Default credentials hint */}
-          <div style={{
-            marginTop: 28, padding: '14px 16px',
-            background: '#FFFFFF', borderRadius: 10,
-            border: '1px solid #E7E5E4',
-          }}>
-            <Text style={{ fontSize: 12, color: '#A8A29E' }}>
-              默认账号：
-              <code style={{
-                background: '#F0EDEA', padding: '1px 6px', borderRadius: 4,
-                color: '#44403C', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, marginLeft: 4,
-              }}>admin</code>
-              {' / '}
-              <code style={{
-                background: '#F0EDEA', padding: '1px 6px', borderRadius: 4,
-                color: '#44403C', fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
-              }}>111111</code>
-            </Text>
-          </div>
+
         </div>
       </div>
     </div>
