@@ -388,7 +388,7 @@ def list_nav_nodes(db: Session = Depends(get_db)):
 
 @router.post("")
 def create_nav_node(data: NavNodeCreate, db: Session = Depends(get_db)):
-    """创建导航节点"""
+    """创建导航节点，同时同步更新 mkdocs.yml"""
     node = TypeList(
         name=data.name,
         parent_path=data.parent_path or "",
@@ -398,6 +398,10 @@ def create_nav_node(data: NavNodeCreate, db: Session = Depends(get_db)):
     db.add(node)
     db.commit()
     db.refresh(node)
+
+    # Sync to mkdocs.yml
+    _sync_node_add_to_mkdocs(data.name, data.parent_path or "", data.mark or "")
+
     return {
         "id": node.id,
         "name": node.name,
@@ -432,6 +436,181 @@ def batch_update_tree(data: NavTreeUpdate, db: Session = Depends(get_db)):
         }
         for n in nodes
     ]
+
+
+# ============ Sync individual node changes to mkdocs.yml ============
+
+def _sync_node_add_to_mkdocs(name: str, parent_path: str, mark: str):
+    """Add a new node to mkdocs.yml nav structure.
+    
+    Args:
+        name: Node name (menu label)
+        parent_path: Parent path like "ESP Wireless" or "ESP Wireless/Sub Category"
+        mark: Doc ID string (empty for directory nodes)
+    """
+    if not os.path.isfile(MKDOCS_YML_PATH):
+        logger.info("mkdocs.yml not found, skipping sync for node add")
+        return
+
+    try:
+        with open(MKDOCS_YML_PATH, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        if not config or not isinstance(config, dict):
+            return
+
+        nav = config.get("nav", [])
+
+        # Build the new nav entry
+        if mark:
+            new_entry = {name: f"{mark}.md"}
+        else:
+            new_entry = {name: []}
+
+        if not parent_path:
+            # Add to root level
+            nav.append(new_entry)
+        else:
+            # Find parent node and add as child
+            parent_parts = parent_path.split("/")
+            _insert_into_nav(nav, parent_parts, new_entry)
+
+        config["nav"] = nav
+        with open(MKDOCS_YML_PATH, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        logger.info("Synced node add to mkdocs.yml: %s (parent: %s)", name, parent_path)
+    except Exception as e:
+        logger.error("Failed to sync node add to mkdocs.yml: %s", e)
+
+
+def _insert_into_nav(nav_items: list, parent_parts: list, new_entry: dict):
+    """Recursively find the parent node in nav and append new_entry to its children."""
+    if not parent_parts:
+        return False
+
+    target_name = parent_parts[0]
+    remaining = parent_parts[1:]
+
+    for item in nav_items:
+        if isinstance(item, dict):
+            for key, value in item.items():
+                if key == target_name:
+                    if not remaining:
+                        # Found the parent, add child
+                        if isinstance(value, list):
+                            value.append(new_entry)
+                        else:
+                            # Parent was a leaf node, convert to directory
+                            item[key] = [new_entry]
+                        return True
+                    elif isinstance(value, list):
+                        # Go deeper
+                        if _insert_into_nav(value, remaining, new_entry):
+                            return True
+    return False
+
+
+def _sync_node_update_to_mkdocs(old_name: str, old_parent_path: str, new_name: str, new_mark: str):
+    """Update a node in mkdocs.yml nav structure (rename or change doc link)."""
+    if not os.path.isfile(MKDOCS_YML_PATH):
+        return
+
+    try:
+        with open(MKDOCS_YML_PATH, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        if not config or not isinstance(config, dict):
+            return
+
+        nav = config.get("nav", [])
+
+        # Find and update the node
+        parent_parts = old_parent_path.split("/") if old_parent_path else []
+        target_list = nav
+        # Navigate to parent
+        for part in parent_parts:
+            if not part:
+                continue
+            found = False
+            for item in target_list:
+                if isinstance(item, dict):
+                    for key, value in item.items():
+                        if key == part and isinstance(value, list):
+                            target_list = value
+                            found = True
+                            break
+                if found:
+                    break
+            if not found:
+                logger.warning("Parent path not found in nav for update: %s", old_parent_path)
+                return
+
+        # Find the node in target_list and update it
+        for i, item in enumerate(target_list):
+            if isinstance(item, dict) and old_name in item:
+                old_value = item[old_name]
+                if new_mark:
+                    new_value = f"{new_mark}.md"
+                elif isinstance(old_value, list):
+                    new_value = old_value  # Keep children
+                else:
+                    new_value = []
+
+                # Replace the entry (rename key)
+                target_list[i] = {new_name: new_value}
+                break
+
+        config["nav"] = nav
+        with open(MKDOCS_YML_PATH, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        logger.info("Synced node update to mkdocs.yml: %s -> %s", old_name, new_name)
+    except Exception as e:
+        logger.error("Failed to sync node update to mkdocs.yml: %s", e)
+
+
+def _sync_node_delete_from_mkdocs(name: str, parent_path: str):
+    """Remove a node from mkdocs.yml nav structure."""
+    if not os.path.isfile(MKDOCS_YML_PATH):
+        return
+
+    try:
+        with open(MKDOCS_YML_PATH, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        if not config or not isinstance(config, dict):
+            return
+
+        nav = config.get("nav", [])
+
+        # Navigate to parent
+        parent_parts = parent_path.split("/") if parent_path else []
+        target_list = nav
+        for part in parent_parts:
+            if not part:
+                continue
+            found = False
+            for item in target_list:
+                if isinstance(item, dict):
+                    for key, value in item.items():
+                        if key == part and isinstance(value, list):
+                            target_list = value
+                            found = True
+                            break
+                if found:
+                    break
+            if not found:
+                logger.warning("Parent path not found in nav for delete: %s", parent_path)
+                return
+
+        # Find and remove the node
+        for i, item in enumerate(target_list):
+            if isinstance(item, dict) and name in item:
+                target_list.pop(i)
+                break
+
+        config["nav"] = nav
+        with open(MKDOCS_YML_PATH, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        logger.info("Synced node delete from mkdocs.yml: %s (parent: %s)", name, parent_path)
+    except Exception as e:
+        logger.error("Failed to sync node delete from mkdocs.yml: %s", e)
 
 
 # ============ Reorder: write tree back to mkdocs.yml ============
@@ -598,11 +777,14 @@ def reorder_nav_tree(data: dict, db: Session = Depends(get_db)):
 
 @router.put("/{node_id}")
 def update_nav_node(node_id: int, data: NavNodeUpdate, db: Session = Depends(get_db)):
-    """更新导航节点"""
+    """更新导航节点，同时同步更新 mkdocs.yml"""
     node = db.query(TypeList).filter(TypeList.id == node_id).first()
     if not node:
         raise HTTPException(404, "菜单节点不存在")
     
+    old_name = node.name
+    old_parent_path = node.parent_path
+
     if data.name is not None:
         node.name = data.name
     if data.parent_path is not None:
@@ -614,6 +796,13 @@ def update_nav_node(node_id: int, data: NavNodeUpdate, db: Session = Depends(get
     
     db.commit()
     db.refresh(node)
+
+    # Sync to mkdocs.yml: update the node in nav
+    _sync_node_update_to_mkdocs(
+        old_name, old_parent_path,
+        node.name, node.mark or ""
+    )
+
     return {
         "id": node.id,
         "name": node.name,
@@ -625,11 +814,14 @@ def update_nav_node(node_id: int, data: NavNodeUpdate, db: Session = Depends(get
 
 @router.delete("/{node_id}")
 def delete_nav_node(node_id: int, db: Session = Depends(get_db)):
-    """删除导航节点"""
+    """删除导航节点，同时同步更新 mkdocs.yml"""
     node = db.query(TypeList).filter(TypeList.id == node_id).first()
     if not node:
         raise HTTPException(404, "菜单节点不存在")
     
+    # Sync to mkdocs.yml: remove the node from nav
+    _sync_node_delete_from_mkdocs(node.name, node.parent_path or "")
+
     # 软删除：设置 status = 1
     node.status = 1
     db.commit()

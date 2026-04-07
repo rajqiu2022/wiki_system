@@ -95,6 +95,14 @@ def _resolve_doc_for_nav_entry(
     stem = filename.replace('.md', '').strip()
     if stem in name_map:
         return name_map[stem]
+    # Strategy 5: filename stem is a numeric doc_id, look up by ID in name_map values
+    try:
+        doc_id_int = int(stem)
+        for doc in name_map.values():
+            if doc.id == doc_id_int:
+                return doc
+    except (ValueError, TypeError):
+        pass
     return None
 
 
