@@ -776,9 +776,26 @@ def reorder_nav_tree(data: dict, db: Session = Depends(get_db)):
 
 
 @router.put("/{node_id}")
-def update_nav_node(node_id: int, data: NavNodeUpdate, db: Session = Depends(get_db)):
-    """更新导航节点，同时同步更新 mkdocs.yml"""
-    node = db.query(TypeList).filter(TypeList.id == node_id).first()
+def update_nav_node(node_id: str, data: NavNodeUpdate, db: Session = Depends(get_db)):
+    """更新导航节点，同时同步更新 mkdocs.yml
+    
+    node_id 可以是数字 ID 或路径字符串（如 "Parent/Child"）
+    """
+    # Resolve node: by numeric ID or by path string
+    node = None
+    if node_id.isdigit():
+        node = db.query(TypeList).filter(TypeList.id == int(node_id)).first()
+    else:
+        # Path string: parse name and parent_path
+        parts = node_id.split("/")
+        name = parts[-1]
+        parent_path = "/".join(parts[:-1]) if len(parts) > 1 else ""
+        node = db.query(TypeList).filter(
+            TypeList.name == name,
+            TypeList.parent_path == parent_path,
+            TypeList.status == 0
+        ).first()
+    
     if not node:
         raise HTTPException(404, "菜单节点不存在")
     
@@ -813,17 +830,39 @@ def update_nav_node(node_id: int, data: NavNodeUpdate, db: Session = Depends(get
 
 
 @router.delete("/{node_id}")
-def delete_nav_node(node_id: int, db: Session = Depends(get_db)):
-    """删除导航节点，同时同步更新 mkdocs.yml"""
-    node = db.query(TypeList).filter(TypeList.id == node_id).first()
-    if not node:
-        raise HTTPException(404, "菜单节点不存在")
+def delete_nav_node(node_id: str, db: Session = Depends(get_db)):
+    """删除导航节点，同时同步更新 mkdocs.yml
     
-    # Sync to mkdocs.yml: remove the node from nav
-    _sync_node_delete_from_mkdocs(node.name, node.parent_path or "")
+    node_id 可以是数字 ID 或路径字符串（如 "Parent/Child"）
+    """
+    # Resolve node: by numeric ID or by path string
+    node = None
+    node_name = ""
+    node_parent_path = ""
+    
+    if node_id.isdigit():
+        node = db.query(TypeList).filter(TypeList.id == int(node_id)).first()
+        if node:
+            node_name = node.name
+            node_parent_path = node.parent_path or ""
+    else:
+        # Path string: parse name and parent_path
+        parts = node_id.split("/")
+        node_name = parts[-1]
+        node_parent_path = "/".join(parts[:-1]) if len(parts) > 1 else ""
+        node = db.query(TypeList).filter(
+            TypeList.name == node_name,
+            TypeList.parent_path == node_parent_path,
+            TypeList.status == 0
+        ).first()
+    
+    # Sync to mkdocs.yml: remove the node from nav (always do this)
+    _sync_node_delete_from_mkdocs(node_name, node_parent_path)
 
-    # 软删除：设置 status = 1
-    node.status = 1
-    db.commit()
+    # If node exists in DB, soft delete it
+    if node:
+        node.status = 1
+        db.commit()
+    
     return {"ok": True}
 
