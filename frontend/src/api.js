@@ -36,6 +36,7 @@ export const getUsers = () => api.get('/users/all').then(r => r.data)
 export const getUsersPaged = (params) => api.get('/users', { params }).then(r => r.data)
 export const createUser = (data) => api.post('/users', data).then(r => r.data)
 export const deleteUser = (id) => api.delete(`/users/${id}`).then(r => r.data)
+export const updateUser = (id, data) => api.put(`/users/${id}`, data).then(r => r.data)
 
 // ---- Documents ----
 // 适配新字段：name, path, description, author, create_time, status, current_editor, content
@@ -70,5 +71,21 @@ export const reorderNav = (tree) => api.put('/nav/tree/reorder', { tree }).then(
 // ---- Publish ----
 export const publish = (userId, force = false) => api.post('/publish', null, { params: { user_id: userId, force } }).then(r => r.data)
 export const getPublishLogs = () => api.get('/publish/logs').then(r => r.data)
+
+// ---- Requirements ----
+export const getRequirements = (params) => api.get('/requirements', { params }).then(r => r.data)
+export const getRequirement = (id) => api.get(`/requirements/${id}`).then(r => r.data)
+export const createRequirement = (data) => api.post('/requirements', data).then(r => r.data)
+export const updateRequirement = (id, data) => api.put(`/requirements/${id}`, data).then(r => r.data)
+export const deleteRequirement = (id) => api.delete(`/requirements/${id}`).then(r => r.data)
+
+// ---- AI Chat ----
+export const aiChat = (messages, image_urls = []) => api.post('/ai/chat', { messages, image_urls }).then(r => r.data)
+
+// ---- Knowledge Graph ----
+export const generateKnowledgeGraph = () => api.post('/ai/knowledge-graph/generate', null, { timeout: 30000 }).then(r => r.data)
+export const getKgTaskStatus = (taskId) => api.get(`/ai/knowledge-graph/task/${taskId}`).then(r => r.data)
+export const getLatestKnowledgeGraph = () => api.get('/ai/knowledge-graph/latest').then(r => r.data)
+export const getKnowledgeGraphHistory = () => api.get('/ai/knowledge-graph/history').then(r => r.data)
 
 export default api

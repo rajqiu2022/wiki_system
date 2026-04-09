@@ -19,6 +19,7 @@ services:
       - wiki-docs:/app/docs
       - wiki-output:/app/output
       - wiki-uploads:/app/uploads
+      - wiki-mkdocs-yml:/app/mkdocs-config
       - /var/www/html/makerfabs/wiki/mkdoc/wiki:/app/mkdocs-site
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -32,3 +33,4 @@ volumes:
   wiki-docs:
   wiki-output:
   wiki-uploads:
+  wiki-mkdocs-yml:

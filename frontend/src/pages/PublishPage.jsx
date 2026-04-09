@@ -74,39 +74,6 @@ export default function PublishPage({ currentUser }) {
     })
   }
 
-  // 强制发布全部文档
-  const handleForcePublish = () => {
-    Modal.confirm({
-      title: '强制发布全部文档',
-      content: (
-        <div>
-          <p style={{ color: '#DC2626', marginBottom: 12 }}>
-            ⚠️ 此操作将强制发布<strong>所有有效文档</strong>（包括已发布和待发布），共 <strong>{docs.length}</strong> 篇。
-          </p>
-          <p style={{ color: '#78716C', fontSize: 13 }}>
-            适用于：首次部署或修复站点时强制重建所有文档。
-          </p>
-        </div>
-      ),
-      okText: '强制发布',
-      cancelText: '取消',
-      okButtonProps: { style: { background: '#DC2626', borderColor: '#DC2626', borderRadius: 8 } },
-      cancelButtonProps: { style: { borderRadius: 8 } },
-      onOk: async () => {
-        setPublishing(true)
-        try {
-          const result = await publish(currentUser?.id, true)  // 传入 force=true
-          message.success('强制发布成功！')
-          fetchData()
-        } catch (e) {
-          message.error(e.response?.data?.detail || '发布失败')
-        } finally {
-          setPublishing(false)
-        }
-      },
-    })
-  }
-
   const logColumns = [
     {
       title: '时间',
@@ -181,17 +148,6 @@ export default function PublishPage({ currentUser }) {
             }}
           >
             {publishing ? '发布中...' : '发布站点'}
-          </Button>
-          <Button
-            icon={<ReloadOutlined />}
-            danger
-            loading={publishing}
-            onClick={handleForcePublish}
-            style={{
-              borderRadius: 8, fontWeight: 600,
-            }}
-          >
-            强制发布
           </Button>
         </Space>
       </div>

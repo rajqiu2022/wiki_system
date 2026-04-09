@@ -43,6 +43,7 @@ class DocCreate(BaseModel):
     path: Optional[str] = None
     description: Optional[str] = ""
     author: Optional[str] = None
+    nav_parent_path: Optional[str] = None  # Nav tree parent path for auto-adding to menu
 
 
 class DocUpdate(BaseModel):
@@ -50,6 +51,8 @@ class DocUpdate(BaseModel):
     path: Optional[str] = None
     description: Optional[str] = None
     status: Optional[int] = None
+    keep_hyphens: Optional[int] = None
+    hidden: Optional[int] = None
 
 
 class DocOut(BaseModel):
@@ -141,3 +144,58 @@ class PublishLogOut(BaseModel):
 
 class PublishRequest(BaseModel):
     user_id: Optional[int] = None
+
+
+# ---- Requirement ----
+class RequirementCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    type: str = "feature"  # feature/bug
+    priority: str = "medium"  # low/medium/high/urgent
+    expected_date: Optional[datetime] = None
+    tags: Optional[str] = None
+
+
+class RequirementUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    expected_date: Optional[datetime] = None
+    assignee: Optional[str] = None
+    tags: Optional[str] = None
+
+
+class RequirementOut(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    type: str = "feature"
+    priority: str = "medium"
+    status: str = "pending"
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    expected_date: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    assignee: Optional[str] = None
+    tags: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ---- AI Chat ----
+class AIChatMessage(BaseModel):
+    role: str  # user/assistant
+    content: str
+
+
+class AIChatRequest(BaseModel):
+    messages: List[AIChatMessage]
+    image_urls: Optional[List[str]] = []  # Image URLs from user messages
+
+
+class AIChatResponse(BaseModel):
+    content: str
+    requirement_created: Optional[dict] = None  # if a requirement was created

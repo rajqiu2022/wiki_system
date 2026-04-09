@@ -31,7 +31,8 @@ if os.path.basename(_BASE_DIR) == "backend":
     _PROJECT_ROOT = os.path.normpath(os.path.join(_BASE_DIR, ".."))
 else:
     _PROJECT_ROOT = _BASE_DIR
-MKDOCS_YML_PATH = os.path.join(_PROJECT_ROOT, "mkdocs.yml")
+# Store mkdocs.yml in persistent volume directory to survive container rebuilds
+MKDOCS_YML_PATH = os.path.join(_PROJECT_ROOT, "mkdocs-config", "mkdocs.yml")
 
 
 def _normalize_path(path: str) -> str:
@@ -47,8 +48,10 @@ def _normalize_path(path: str) -> str:
 
 def _build_name_to_doc_map(db: Session) -> Dict[str, int]:
     """Build mappings from doc name -> doc id for linking menu items to docs.
-    Returns name_map where keys are various forms of doc names."""
-    docs = db.query(WikiList).filter(WikiList.status.in_([0, 3, 4])).all()
+    Returns name_map where keys are various forms of doc names.
+    Includes docs with status=0 (normal), 3 (editing), 4 (editing).
+    Only excludes docs with status=1 (deleted)."""
+    docs = db.query(WikiList).filter(WikiList.status != 1).all()
     name_map = {}
     for doc in docs:
         if doc.name:
@@ -170,6 +173,12 @@ def _convert_mkdocs_nav_to_tree(
                     # Leaf node: article -> filename.md
                     filename = value
                     mark = _resolve_doc_id(key, filename, name_to_doc)
+                    # Skip articles whose doc is deleted or not found
+                    # (name_to_doc excludes status=1 deleted docs, so empty mark
+                    #  means the doc is deleted or not found in DB)
+                    if not mark:
+                        logger.debug("Skipping nav entry '%s' -> '%s': doc deleted or not found", key, value)
+                        continue
                     # Store the UUID/filename reference for publish compatibility
                     file_ref = filename.replace('.md', '').strip()
                     result.append({
@@ -201,6 +210,10 @@ def _convert_mkdocs_nav_to_tree(
                 continue
             node_id = f"{parent_path}/{stem}" if parent_path else stem
             mark = _resolve_doc_id(stem, item, name_to_doc)
+            # Skip articles whose doc is deleted or not found
+            if not mark:
+                logger.debug("Skipping bare nav entry '%s': doc deleted or not found", stem)
+                continue
             result.append({
                 "id": node_id,
                 "name": stem,
@@ -360,7 +373,7 @@ def get_nav_tree(db: Session = Depends(get_db)):
 
     # --- Priority 3: wiki_list path-based tree ---
     logger.info("WIKI_MENU_JSON2 unavailable, falling back to path-based tree")
-    docs = db.query(WikiList).filter(WikiList.status.in_([0, 3, 4])).all()
+    docs = db.query(WikiList).filter(WikiList.status == 0).all()
     dirs = set()
     for doc in docs:
         normalized = _normalize_path(doc.path)
@@ -775,7 +788,7 @@ def reorder_nav_tree(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(500, f"保存菜单顺序失败: {str(e)}")
 
 
-@router.put("/{node_id}")
+@router.put("/{node_id:path}")
 def update_nav_node(node_id: str, data: NavNodeUpdate, db: Session = Depends(get_db)):
     """更新导航节点，同时同步更新 mkdocs.yml
     
@@ -829,7 +842,7 @@ def update_nav_node(node_id: str, data: NavNodeUpdate, db: Session = Depends(get
     }
 
 
-@router.delete("/{node_id}")
+@router.delete("/{node_id:path}")
 def delete_nav_node(node_id: str, db: Session = Depends(get_db)):
     """删除导航节点，同时同步更新 mkdocs.yml
     

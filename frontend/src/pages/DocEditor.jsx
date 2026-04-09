@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Space, Tag, Input, message, Spin, Modal, Dropdown, Tooltip, Typography } from 'antd'
+import { Button, Space, Tag, Input, message, Spin, Modal, Dropdown, Tooltip, Typography, Switch } from 'antd'
 import {
   SaveOutlined, ArrowLeftOutlined, LockOutlined, UnlockOutlined,
   CheckCircleOutlined, InboxOutlined, DownOutlined, EditOutlined,
-  EyeOutlined, FileTextOutlined,
+  EyeOutlined, EyeInvisibleOutlined, FileTextOutlined,
 } from '@ant-design/icons'
-import MDEditor from '@uiw/react-md-editor'
+import CherryEditor from '../components/CherryEditor'
 import { getDoc, updateDoc, updateDocContent, lockDoc, unlockDoc, uploadImage } from '../api'
 
 const { Text } = Typography
@@ -31,6 +31,8 @@ export default function DocEditor({ currentUser }) {
   const userId = currentUser?.id
   const [savedTitle, setSavedTitle] = useState('')
   const [savedContent, setSavedContent] = useState('')
+  const [keepHyphens, setKeepHyphens] = useState(0)
+  const [hidden, setHidden] = useState(0)
   const [autoLockAttempted, setAutoLockAttempted] = useState(false)
 
   // Track whether there are unsaved changes
@@ -48,6 +50,8 @@ export default function DocEditor({ currentUser }) {
       setContent(data.content || '')
       setSavedTitle(data.name || '')
       setSavedContent(data.content || '')
+      setKeepHyphens(data.keep_hyphens ?? 0)
+      setHidden(data.hidden ?? 0)
       setIsLocked(!!data.current_editor)
       setLockedByMe(data.current_editor === currentUser?.username)
     } finally {
@@ -376,85 +380,78 @@ export default function DocEditor({ currentUser }) {
             编辑模式 · Ctrl+S 快速保存
           </div>
         )}
+        {canEdit && (
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Switch
+                size="small"
+                checked={keepHyphens === 1}
+                onChange={async (checked) => {
+                  const val = checked ? 1 : 0
+                  setKeepHyphens(val)
+                  try {
+                    await updateDoc(id, { keep_hyphens: val }, userId)
+                    message.success(checked ? '已设置：保留连字符(-)' : '已设置：连字符(-)转为下划线(_)')
+                  } catch (e) {
+                    setKeepHyphens(val === 1 ? 0 : 1)
+                    message.error('设置失败')
+                  }
+                }}
+              />
+              <span style={{ fontSize: 12, color: '#78716C' }}>
+                发布时保留文件名中的连字符(-)
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Switch
+                size="small"
+                checked={hidden === 1}
+                onChange={async (checked) => {
+                  const val = checked ? 1 : 0
+                  setHidden(val)
+                  try {
+                    await updateDoc(id, { hidden: val }, userId)
+                    message.success(checked ? '已设置：隐藏文章（不在菜单显示，但可通过URL访问）' : '已设置：文章在菜单中正常显示')
+                  } catch (e) {
+                    setHidden(val === 1 ? 0 : 1)
+                    message.error('设置失败')
+                  }
+                }}
+              />
+              <span style={{ fontSize: 12, color: hidden === 1 ? '#8B5CF6' : '#78716C', display: 'flex', alignItems: 'center', gap: 4 }}>
+                {hidden === 1 && <EyeInvisibleOutlined style={{ fontSize: 12 }} />}
+                隐藏文章（发布时生成页面但不在菜单显示）
+              </span>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Editor */}
       <div
-        style={{ flex: 1, minHeight: 0, borderRadius: 12, overflow: 'hidden' }}
-        onPaste={async (e) => {
-          if (!canEdit) return
-          const items = e.clipboardData?.items
-          if (!items) return
-          for (const item of items) {
-            if (item.type.startsWith('image/')) {
-              e.preventDefault()
-              const file = item.getAsFile()
-              if (!file) return
-              message.loading({ content: '正在上传图片...', key: 'img-upload' })
-              try {
-                const result = await uploadImage(file)
-                const imgMarkdown = `![image](${result.url})`
-                // Insert via textarea's native input so Ctrl+Z undo works
-                const textarea = editorRef.current?.querySelector('textarea')
-                if (textarea) {
-                  textarea.focus()
-                  // Use native InputEvent to keep undo stack intact
-                  const nativeInputEvent = new InputEvent('beforeinput', {
-                    inputType: 'insertText',
-                    data: imgMarkdown,
-                    bubbles: true,
-                    cancelable: true,
-                  })
-                  // Try execCommand first (widely supported for undo)
-                  document.execCommand('insertText', false, imgMarkdown)
-                } else {
-                  setContent((prev) => prev + '\n' + imgMarkdown)
-                }
-                message.success({ content: '图片上传成功', key: 'img-upload' })
-              } catch (err) {
-                message.error({ content: err.response?.data?.detail || '图片上传失败', key: 'img-upload' })
-              }
-              return
-            }
-          }
+        style={{
+          flex: 1, minHeight: 0, borderRadius: 12, overflow: 'hidden',
+          background: '#FFFFFF', border: '1px solid #E7E5E4',
         }}
-        onDrop={async (e) => {
-          if (!canEdit) return
-          const files = e.dataTransfer?.files
-          if (!files || files.length === 0) return
-          const file = files[0]
-          if (!file.type.startsWith('image/')) return
-          e.preventDefault()
-          message.loading({ content: '正在上传图片...', key: 'img-upload' })
-          try {
-            const result = await uploadImage(file)
-            const imgMarkdown = `\n![image](${result.url})`
-            const textarea = editorRef.current?.querySelector('textarea')
-            if (textarea) {
-              textarea.focus()
-              // Move cursor to end for drop
-              textarea.selectionStart = textarea.selectionEnd = textarea.value.length
-              document.execCommand('insertText', false, imgMarkdown)
-            } else {
-              setContent((prev) => prev + imgMarkdown)
-            }
-            message.success({ content: '图片上传成功', key: 'img-upload' })
-          } catch (err) {
-            message.error({ content: err.response?.data?.detail || '图片上传失败', key: 'img-upload' })
-          }
-        }}
-        onDragOver={(e) => { if (canEdit) e.preventDefault() }}
         ref={editorRef}
       >
-        <div data-color-mode="light" style={{ height: '100%' }}>
-          <MDEditor
-            value={content}
-            onChange={(val) => setContent(val || '')}
-            preview={canEdit ? 'live' : 'preview'}
-            hideToolbar={!canEdit}
-            height="100%"
-          />
-        </div>
+        <CherryEditor
+          value={content}
+          onChange={(val) => setContent(val || '')}
+          mode={canEdit ? 'edit&preview' : 'previewOnly'}
+          readOnly={!canEdit}
+          hideToolbar={!canEdit}
+          height="100%"
+          onImageUpload={async (file) => {
+            message.loading({ content: '正在上传图片...', key: 'img-upload' })
+            try {
+              const result = await uploadImage(file)
+              message.success({ content: '图片上传成功', key: 'img-upload' })
+              return result.url
+            } catch (err) {
+              message.error({ content: err.response?.data?.detail || '图片上传失败', key: 'img-upload' })
+              throw err
+            }
+          }}
+        />
       </div>
     </div>
   )

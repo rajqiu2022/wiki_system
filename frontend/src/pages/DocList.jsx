@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Button, Input, Select, Modal, Form, message, Tooltip, Empty, Spin,
@@ -7,9 +7,9 @@ import {
   PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined,
   FileTextOutlined, FolderOutlined, FolderOpenOutlined,
   ReloadOutlined, RightOutlined, DisconnectOutlined,
-  EyeOutlined, ArrowLeftOutlined,
+  EyeOutlined, EyeInvisibleOutlined, ArrowLeftOutlined, CloudUploadOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
-import MDEditor from '@uiw/react-md-editor'
+import CherryEditor from '../components/CherryEditor'
 import { getDocs, getNavTree, createDoc, deleteDoc, updateDoc, getDoc } from '../api'
 import { TreeSelect } from 'antd'
 
@@ -28,6 +28,12 @@ const LIST_STATUS_OPTIONS = [
   { value: 4, label: '修改中' },
 ]
 
+// Publish status config
+const PUBLISH_STATUS_CONFIG = {
+  0: { color: '#16A34A', bg: '#F0FDF4', label: '已发布', icon: '✓' },
+  1: { color: '#E67E22', bg: '#FFF7ED', label: '待发布', icon: '●' },
+}
+
 // Normalize status value to integer (DB may store as string)
 function normalizeStatus(val) {
   if (val === null || val === undefined) return 0
@@ -39,9 +45,6 @@ function formatTime(t) {
   if (!t) return '-'
   return t
 }
-
-// Legacy docs base path (kept for new doc creation path selection)
-const LEGACY_DOCS_BASE = '/var/www/html/wiki.makerfabs.com/mkdoc/wiki/docs/'
 
 // Collect all doc IDs (mark field) from a directory node and its descendants
 function collectDocIds(node) {
@@ -66,8 +69,27 @@ function findNodeById(nodes, id) {
   return null
 }
 
+// Count all doc nodes (leaf nodes with mark or file_ref) under a tree node recursively
+function countDocs(node) {
+  if (!node) return 0
+  let count = 0
+  if (node.mark || (!node.children?.length && node.file_ref)) {
+    count = 1
+  }
+  if (node.children && node.children.length > 0) {
+    node.children.forEach((c) => { count += countDocs(c) })
+  }
+  return count
+}
+
 // 树节点组件
 function TreeNode({ node, depth, selectedId, onSelect, expandedKeys, onToggle }) {
+  const docCount = useMemo(() => {
+    if (node.children && node.children.length > 0) {
+      return countDocs(node)
+    }
+    return 0
+  }, [node])
   const hasChildren = node.children && node.children.length > 0
   const isExpanded = expandedKeys.has(node.id)
   const isSelected = selectedId === node.id
@@ -145,6 +167,16 @@ function TreeNode({ node, depth, selectedId, onSelect, expandedKeys, onToggle })
         }}>
           {node.name}
         </span>
+        {hasChildren && docCount > 0 && (
+          <span style={{
+            fontSize: 11,
+            color: '#A8A29E',
+            flexShrink: 0,
+            marginLeft: 'auto',
+          }}>
+            {docCount}
+          </span>
+        )}
       </div>
       </Tooltip>
       {hasChildren && isExpanded && (
@@ -169,6 +201,7 @@ function TreeNode({ node, depth, selectedId, onSelect, expandedKeys, onToggle })
 export default function DocList({ currentUser }) {
   const navigate = useNavigate()
   const [docs, setDocs] = useState([])
+  const [totalDocCount, setTotalDocCount] = useState(0)
   const [navTree, setNavTree] = useState([])
   const [loading, setLoading] = useState(false)
   const [navLoading, setNavLoading] = useState(false)
@@ -179,6 +212,47 @@ export default function DocList({ currentUser }) {
   // 树状态
   const [selectedNodeId, setSelectedNodeId] = useState(null)
   const [expandedKeys, setExpandedKeys] = useState(new Set())
+
+  // Resizable sidebar state
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('wiki_sidebar_width')
+    return saved ? Math.max(160, Math.min(600, Number(saved))) : 240
+  })
+  const isResizing = useRef(false)
+  const startX = useRef(0)
+  const startWidth = useRef(240)
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault()
+    isResizing.current = true
+    startX.current = e.clientX
+    startWidth.current = sidebarWidth
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (e) => {
+      if (!isResizing.current) return
+      const delta = e.clientX - startX.current
+      const newWidth = Math.max(160, Math.min(600, startWidth.current + delta))
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      isResizing.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      // Persist width
+      setSidebarWidth((w) => {
+        localStorage.setItem('wiki_sidebar_width', String(w))
+        return w
+      })
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [sidebarWidth])
 
   // Article preview state: when a leaf doc node is selected, show its content
   const [previewDoc, setPreviewDoc] = useState(null) // { id, name, content }
@@ -199,8 +273,17 @@ export default function DocList({ currentUser }) {
     }
   }, [filters.status, filters.keyword])
 
+  // Fetch total doc count (not affected by directory filtering)
+  const fetchTotalCount = useCallback(async () => {
+    try {
+      const data = await getDocs({})
+      setTotalDocCount(data.length)
+    } catch {}
+  }, [])
+
   // 初始化加载
   useEffect(() => { fetchDocs(null) }, [fetchDocs])
+  useEffect(() => { fetchTotalCount() }, [fetchTotalCount])
 
   // Collect doc IDs for the selected directory node
   const selectedDocIds = useMemo(() => {
@@ -320,16 +403,18 @@ export default function DocList({ currentUser }) {
   // Build tree select data from navTree for directory path selection
   const dirTreeData = useMemo(() => {
     const buildTreeSelectData = (nodes, parentPath = '') => {
-      return nodes.map((node) => {
+      return nodes.filter(node => !node.mark && node.children).map((node) => {
         const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name
-        const fullPath = LEGACY_DOCS_BASE + currentPath + '/'
         const item = {
           title: node.name,
-          value: fullPath,
+          value: currentPath,
           key: node.id || currentPath,
         }
         if (node.children && node.children.length > 0) {
-          item.children = buildTreeSelectData(node.children, currentPath)
+          const childDirs = buildTreeSelectData(node.children, currentPath)
+          if (childDirs.length > 0) {
+            item.children = childDirs
+          }
         }
         return item
       })
@@ -345,7 +430,8 @@ export default function DocList({ currentUser }) {
         name: values.title,
         path: values.path || '',
         description: values.description || '',
-        author: currentUser.username 
+        author: currentUser.username,
+        nav_parent_path: values.path || '',
       })
       message.success('文档创建成功')
       setCreateOpen(false)
@@ -393,7 +479,7 @@ export default function DocList({ currentUser }) {
     <div className="fade-in" style={{ flex: 1, display: 'flex', gap: 20, minHeight: 0 }}>
       {/* 左侧目录树 */}
       <div style={{
-        width: 240,
+        width: sidebarWidth,
         flexShrink: 0,
         background: '#FFFFFF',
         borderRadius: 12,
@@ -401,6 +487,7 @@ export default function DocList({ currentUser }) {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        position: 'relative',
       }}>
         <div style={{
           padding: '14px 14px 10px',
@@ -450,7 +537,7 @@ export default function DocList({ currentUser }) {
                 <span style={{ width: 10, display: 'inline-block', flexShrink: 0 }} />
                 <FileTextOutlined style={{ fontSize: 13, flexShrink: 0, color: '#57534E' }} />
                 <span>全部文档</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#A8A29E' }}>{docs.length}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#A8A29E' }}>{totalDocCount}</span>
               </div>
               {navTree.map((node) => (
                 <TreeNode
@@ -465,6 +552,44 @@ export default function DocList({ currentUser }) {
               ))}
             </>
           )}
+        </div>
+        {/* Drag handle for resizing */}
+        <div
+          onMouseDown={handleMouseDown}
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: -5,
+            width: 10,
+            height: '100%',
+            cursor: 'col-resize',
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.querySelector('.resize-bar').style.opacity = '1'
+            e.currentTarget.querySelector('.resize-bar').style.background = '#0D9488'
+          }}
+          onMouseLeave={(e) => {
+            if (!isResizing.current) {
+              e.currentTarget.querySelector('.resize-bar').style.opacity = '0.3'
+              e.currentTarget.querySelector('.resize-bar').style.background = '#D6D3D1'
+            }
+          }}
+        >
+          <div
+            className="resize-bar"
+            style={{
+              width: 3,
+              height: 40,
+              borderRadius: 3,
+              background: '#D6D3D1',
+              opacity: 0.3,
+              transition: 'opacity 0.2s, background 0.2s',
+            }}
+          />
         </div>
       </div>
 
@@ -532,13 +657,13 @@ export default function DocList({ currentUser }) {
                     </span>
                   </div>
                   {/* Markdown preview */}
-                  <div style={{ flex: 1, overflow: 'auto', padding: 0 }} data-color-mode="light">
-                    <MDEditor
+                  <div style={{ flex: 1, overflow: 'hidden', padding: 0 }}>
+                    <CherryEditor
                       value={previewDoc.content}
-                      preview="preview"
+                      mode="previewOnly"
+                      readOnly
                       hideToolbar
                       height="100%"
-                      visibleDragbar={false}
                       style={{ border: 'none', boxShadow: 'none' }}
                     />
                   </div>
@@ -571,15 +696,44 @@ export default function DocList({ currentUser }) {
               allowClear
               options={LIST_STATUS_OPTIONS}
             />
-            <Button icon={<ReloadOutlined />} onClick={() => { fetchDocs(); fetchNav() }} style={{ borderRadius: 8, height: 36 }}>
+            <Button icon={<ReloadOutlined />} onClick={() => { fetchDocs(); fetchNav(); fetchTotalCount() }} style={{ borderRadius: 8, height: 36 }}>
               刷新
             </Button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontSize: 12, color: '#78716C' }}>
-              共 <span style={{ fontWeight: 700, color: '#1C1917' }}>{displayDocs.length}</span> 篇
-              {selectedNodeId && `（当前目录）`}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#78716C' }}>
+              <span>
+                共 <span style={{ fontWeight: 700, color: '#1C1917' }}>{displayDocs.length}</span> 篇
+                {selectedNodeId && `（当前目录）`}
+              </span>
+              <span style={{ color: '#E7E5E4' }}>|</span>
+              {(() => {
+                const normalCount = displayDocs.filter(d => normalizeStatus(d.status) === 0).length
+                const editingCount = displayDocs.filter(d => [3, 4].includes(normalizeStatus(d.status))).length
+                const publishedCount = displayDocs.filter(d => d.publish_status === 0).length
+                const deletedCount = displayDocs.filter(d => normalizeStatus(d.status) === 1).length
+                return (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} />
+                      正常 <span style={{ fontWeight: 600, color: '#16A34A' }}>{normalCount}</span>
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#D97706', display: 'inline-block' }} />
+                      修改中 <span style={{ fontWeight: 600, color: '#D97706' }}>{editingCount}</span>
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0D9488', display: 'inline-block' }} />
+                      已发布 <span style={{ fontWeight: 600, color: '#0D9488' }}>{publishedCount}</span>
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9CA3AF', display: 'inline-block' }} />
+                      已删除 <span style={{ fontWeight: 600, color: '#9CA3AF' }}>{deletedCount}</span>
+                    </span>
+                  </span>
+                )
+              })()}
             </div>
             <Button
               type="primary"
@@ -620,7 +774,7 @@ export default function DocList({ currentUser }) {
               {/* 表头 */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 100px 140px 120px 80px',
+                gridTemplateColumns: '1fr 100px 80px 140px 120px 80px',
                 gap: 0,
                 padding: '0 20px',
                 borderBottom: '1px solid #F5F5F3',
@@ -631,6 +785,7 @@ export default function DocList({ currentUser }) {
               }}>
                 <span>标题</span>
                 <span>状态</span>
+                <span>发布</span>
                 <span>修改时间</span>
                 <span>创建人</span>
                 <span style={{ textAlign: 'right' }}>操作</span>
@@ -639,13 +794,15 @@ export default function DocList({ currentUser }) {
               {displayDocs.map((doc, idx) => {
                 const docStatus = normalizeStatus(doc.status)
                 const status = STATUS_CONFIG[docStatus] || STATUS_CONFIG[0]
+                const pubStatus = PUBLISH_STATUS_CONFIG[doc.publish_status ?? 1] || PUBLISH_STATUS_CONFIG[1]
+                const isHidden = doc.hidden === 1
                 return (
                   <div
                     key={doc.id}
                     onClick={() => locateDocInTree(doc.id)}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 100px 140px 120px 80px',
+                      gridTemplateColumns: '1fr 100px 80px 140px 120px 80px',
                       gap: 0,
                       padding: '0 20px',
                       alignItems: 'center',
@@ -669,6 +826,19 @@ export default function DocList({ currentUser }) {
                       }}>
                         {doc.name}
                       </span>
+                      {isHidden && (
+                        <Tooltip title="隐藏文章：发布时生成页面但不在菜单显示">
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            fontSize: 10, color: '#8B5CF6', flexShrink: 0,
+                            padding: '1px 6px', borderRadius: 4,
+                            background: '#F5F3FF', border: '1px solid #EDE9FE',
+                          }}>
+                            <EyeInvisibleOutlined style={{ fontSize: 10 }} />
+                            隐藏
+                          </span>
+                        </Tooltip>
+                      )}
                       {doc.current_editor && (
                         <span style={{ fontSize: 10, color: '#D97706', flexShrink: 0 }}>(锁定中)</span>
                       )}
@@ -712,6 +882,23 @@ export default function DocList({ currentUser }) {
                           return { ...opt, label: cfg.label }
                         })}
                       />
+                    </div>
+                    {/* 发布状态 */}
+                    <div>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 11, fontWeight: 500,
+                        padding: '2px 8px', borderRadius: 10,
+                        color: pubStatus.color,
+                        background: pubStatus.bg,
+                      }}>
+                        {doc.publish_status === 0 ? (
+                          <CheckCircleOutlined style={{ fontSize: 10 }} />
+                        ) : (
+                          <CloudUploadOutlined style={{ fontSize: 10 }} />
+                        )}
+                        {pubStatus.label}
+                      </span>
                     </div>
                     {/* 修改时间 */}
                     <span style={{ fontSize: 12, color: '#78716C' }}>

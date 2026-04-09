@@ -29,10 +29,11 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && pip install --no-cache-dir mkdocs mkdocs-material -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 复制后端代码
+# Copy backend code
 COPY backend/app ./app
-COPY docs ./docs
-COPY mkdocs.yml .
+
+# Create mkdocs-config directory (will be mounted as volume)
+RUN mkdir -p /app/mkdocs-config
 
 # 复制前端源码（用于调试）
 COPY frontend/src ./frontend/src

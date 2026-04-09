@@ -11,6 +11,8 @@ import {
   UserOutlined,
   GlobalOutlined,
   MenuFoldOutlined,
+  BulbOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import { getMe } from './api'
 import DocList from './pages/DocList'
@@ -19,6 +21,8 @@ import NavEditor from './pages/NavEditor'
 import PublishPage from './pages/PublishPage'
 import UserList from './pages/UserList'
 import LoginPage from './pages/LoginPage'
+import RequirementList from './pages/RequirementList'
+import AIChatPage from './pages/AIChatPage'
 
 const { Sider, Header, Content } = Layout
 
@@ -30,6 +34,8 @@ const MENU_ITEMS = [
   { key: '/docs', icon: FileTextOutlined, label: '文档' },
   { key: '/nav', icon: MenuOutlined, label: '菜单' },
   { key: '/publish', icon: CloudUploadOutlined, label: '发布' },
+  { key: '/requirements', icon: BulbOutlined, label: '需求', adminOnly: true },
+  { key: '/ai-chat', icon: RobotOutlined, label: 'AI助手', adminOnly: true },
 ]
 
 export default function App() {
@@ -186,7 +192,7 @@ export default function App() {
 
         {/* Nav Items */}
         <div style={{ padding: '12px 0', flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {MENU_ITEMS.map((item) => {
+          {MENU_ITEMS.filter(item => !item.adminOnly || isAdmin).map((item) => {
             const isSelected = currentPath === item.key
             const Icon = item.icon
             return (
@@ -319,6 +325,8 @@ export default function App() {
             {currentPath === '/nav' && <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', margin: 0, fontFamily: "'Newsreader', Georgia, serif" }}>菜单</h1>}
             {currentPath === '/publish' && <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', margin: 0, fontFamily: "'Newsreader', Georgia, serif" }}>发布</h1>}
             {currentPath === '/users' && <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', margin: 0, fontFamily: "'Newsreader', Georgia, serif" }}>用户</h1>}
+            {currentPath === '/requirements' && <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', margin: 0, fontFamily: "'Newsreader', Georgia, serif" }}>需求管理</h1>}
+            {currentPath === '/ai-chat' && <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', margin: 0, fontFamily: "'Newsreader', Georgia, serif" }}>AI助手</h1>}
             {currentPath.startsWith('/docs/') && <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1C1917', margin: 0, fontFamily: "'Newsreader', Georgia, serif" }}>编辑文档</h1>}
           </div>
 
@@ -358,10 +366,11 @@ export default function App() {
             <Route path="/nav" element={<NavEditor currentUser={currentUser} />} />
             <Route path="/publish" element={<PublishPage currentUser={currentUser} />} />
             {isAdmin && <Route path="/users" element={<UserList currentUser={currentUser} />} />}
+            {isAdmin && <Route path="/requirements" element={<RequirementList currentUser={currentUser} />} />}
+            {isAdmin && <Route path="/ai-chat" element={<AIChatPage currentUser={currentUser} />} />}
             <Route path="/login" element={<Navigate to="/docs" replace />} />
             <Route path="*" element={<Navigate to="/docs" replace />} />
-          </Routes>
-        </Content>
+          </Routes>        </Content>
       </Layout>
     </Layout>
   )

@@ -44,3 +44,9 @@ import_log.txt
 
 # Docker
 .dockerignore
+
+# Temp files
+NUL
+nul
+*.tar.gz
+frontend/nul

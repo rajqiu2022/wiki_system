@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Table, Button, Input, Modal, Form, Select, Space, message, Popconfirm, Typography, Avatar } from 'antd'
-import { PlusOutlined, SearchOutlined, DeleteOutlined, UserOutlined } from '@ant-design/icons'
-import { getUsersPaged, createUser, deleteUser } from '../api'
+import { PlusOutlined, SearchOutlined, DeleteOutlined, UserOutlined, KeyOutlined } from '@ant-design/icons'
+import { getUsersPaged, createUser, deleteUser, updateUser } from '../api'
 
 const { Text } = Typography
 
@@ -32,6 +32,10 @@ export default function UserList({ currentUser }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [form] = Form.useForm()
   const [creating, setCreating] = useState(false)
+  const [resetModalOpen, setResetModalOpen] = useState(false)
+  const [resetUser, setResetUser] = useState(null)
+  const [resetForm] = Form.useForm()
+  const [resetting, setResetting] = useState(false)
 
   const isAdmin = currentUser?.role === 'admin'
 
@@ -65,6 +69,30 @@ export default function UserList({ currentUser }) {
     } finally {
       setCreating(false)
     }
+  }
+
+  const handleResetPassword = async () => {
+    try {
+      const values = await resetForm.validateFields()
+      setResetting(true)
+      await updateUser(resetUser.id, { password: values.password })
+      message.success(`用户 ${resetUser.username} 密码重置成功`)
+      setResetModalOpen(false)
+      resetForm.resetFields()
+      setResetUser(null)
+    } catch (err) {
+      if (err.errorFields) return
+      const detail = err.response?.data?.detail
+      message.error(typeof detail === 'string' ? detail : '重置密码失败')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const openResetModal = (record) => {
+    setResetUser(record)
+    resetForm.resetFields()
+    setResetModalOpen(true)
   }
 
   const handleDelete = async (id) => {
@@ -126,27 +154,39 @@ export default function UserList({ currentUser }) {
     },
     ...(isAdmin ? [{
       title: '操作',
-      width: 90,
-      render: (_, record) =>
-        record.username === 'admin' ? (
-          <span style={{ fontSize: 12, color: '#A8A29E', padding: '3px 8px', background: '#F5F5F3', borderRadius: 6 }}>
-            不可删除
-          </span>
-        ) : (
-          <Popconfirm
-            title="确定删除该用户？"
-            description="此操作不可撤销"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true, style: { borderRadius: 6 } }}
-            cancelButtonProps={{ style: { borderRadius: 6 } }}
+      width: 160,
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="text"
+            size="small"
+            icon={<KeyOutlined />}
+            style={{ borderRadius: 6, color: '#D97706' }}
+            onClick={() => openResetModal(record)}
           >
-            <Button type="text" danger size="small" icon={<DeleteOutlined />} style={{ borderRadius: 6 }}>
-              删除
-            </Button>
-          </Popconfirm>
-        ),
+            重置密码
+          </Button>
+          {record.username === 'admin' ? (
+            <span style={{ fontSize: 12, color: '#A8A29E', padding: '3px 8px', background: '#F5F5F3', borderRadius: 6 }}>
+              不可删除
+            </span>
+          ) : (
+            <Popconfirm
+              title="确定删除该用户？"
+              description="此操作不可撤销"
+              onConfirm={() => handleDelete(record.id)}
+              okText="确定删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true, style: { borderRadius: 6 } }}
+              cancelButtonProps={{ style: { borderRadius: 6 } }}
+            >
+              <Button type="text" danger size="small" icon={<DeleteOutlined />} style={{ borderRadius: 6 }}>
+                删除
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
+      ),
     }] : []),
   ]
 
@@ -245,6 +285,51 @@ export default function UserList({ currentUser }) {
               <Select.Option value="user">用户 — 可编辑文档</Select.Option>
               <Select.Option value="manager">经理 — 管理权限</Select.Option>
             </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal
+        title={
+          <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontWeight: 700, fontSize: 18, color: '#1C1917' }}>
+            重置密码 {resetUser && <span style={{ color: '#A8A29E', fontSize: 14, fontWeight: 400 }}>— {resetUser.username}</span>}
+          </div>
+        }
+        open={resetModalOpen}
+        onOk={handleResetPassword}
+        onCancel={() => { setResetModalOpen(false); resetForm.resetFields(); setResetUser(null) }}
+        confirmLoading={resetting}
+        okText="确认重置"
+        cancelText="取消"
+        okButtonProps={{ style: { background: '#D97706', borderColor: '#D97706', borderRadius: 8 } }}
+        cancelButtonProps={{ style: { borderRadius: 8 } }}
+      >
+        <Form form={resetForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item
+            name="password"
+            label={<span style={{ fontWeight: 600, color: '#44403C' }}>新密码</span>}
+            rules={[{ required: true, message: '请输入新密码' }, { min: 6, message: '密码至少 6 位' }]}
+          >
+            <Input.Password placeholder="请输入新密码（至少 6 位）" style={{ borderRadius: 8, height: 40 }} />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label={<span style={{ fontWeight: 600, color: '#44403C' }}>确认密码</span>}
+            dependencies={['password']}
+            rules={[
+              { required: true, message: '请确认新密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve()
+                  }
+                  return Promise.reject(new Error('两次输入的密码不一致'))
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="请再次输入新密码" style={{ borderRadius: 8, height: 40 }} />
           </Form.Item>
         </Form>
       </Modal>

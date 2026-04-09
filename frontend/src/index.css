@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.loli.net/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ===== Design Tokens ===== */
 :root {
@@ -294,23 +294,28 @@ h3 { font-size: 1.25rem; }
 /* Avatar */
 .ant-avatar { font-family: var(--font-body) !important; font-weight: 600 !important; }
 
-/* ===== Markdown Editor ===== */
-.w-md-editor {
-  min-height: 300px !important;
-  border-radius: var(--radius-lg) !important;
-  border: 1px solid var(--color-border) !important;
-  box-shadow: none !important;
+/* ===== Cherry Markdown Editor ===== */
+.cherry-editor-wrapper {
+  height: 100%;
+  width: 100%;
+}
+.cherry-editor-wrapper .cherry {
   height: 100% !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
-.w-md-editor-toolbar {
-  background: var(--color-bg) !important;
+.cherry-editor-wrapper .cherry .cherry-toolbar {
   border-bottom: 1px solid var(--color-border-light) !important;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
-  padding: 6px 12px !important;
+  background: var(--color-bg) !important;
 }
-.w-md-editor-text-input,
-.w-md-editor-text { font-family: var(--font-mono) !important; font-size: 14px !important; }
-.w-md-editor-preview { font-family: var(--font-body) !important; }
+.cherry-editor-wrapper .cherry .cherry-editor {
+  font-family: 'Consolas', 'Courier New', monospace !important;
+  font-size: 14px !important;
+}
+.cherry-editor-wrapper .cherry .cherry-previewer {
+  font-family: var(--font-body) !important;
+}
 
 /* Editor Card */
 .ant-card.editor-card,

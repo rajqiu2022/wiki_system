@@ -32,6 +32,9 @@ class WikiList(Base):
     create_time = Column(String(32), nullable=True)
     status = Column(Integer, nullable=False, default=0)
     current_editor = Column(String(32), nullable=False, default="")
+    publish_status = Column(Integer, nullable=False, default=1)  # 0=published, 1=unpublished(pending)
+    keep_hyphens = Column(Integer, nullable=False, default=0)  # 0=replace hyphens with underscores, 1=keep hyphens as-is
+    hidden = Column(Integer, nullable=False, default=0)  # 0=visible in menu, 1=hidden from menu (still generates HTML)
 
     # 关联文件内容
     files = relationship("WikiFile", backref="wiki_list", foreign_keys="WikiFile.list_id")
@@ -97,3 +100,34 @@ class DocumentHistory(Base):
     modified_at = Column(DateTime, default=datetime.now)
     version = Column(Integer, default=1)
     change_note = Column(String(500), nullable=True)
+
+
+class Requirement(Base):
+    """需求/bug反馈表 - 新增"""
+    __tablename__ = "requirements"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(256), nullable=False)
+    description = Column(Text, nullable=True)  # 支持文字+图片(Markdown格式)
+    type = Column(String(20), nullable=False, default="feature")  # feature/bug
+    priority = Column(String(20), nullable=False, default="medium")  # low/medium/high/urgent
+    status = Column(String(20), nullable=False, default="pending")  # pending/in_progress/completed/closed
+    created_by = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    expected_date = Column(DateTime, nullable=True)  # 期望完成日期
+    completed_at = Column(DateTime, nullable=True)  # 实际完成日期
+    assignee = Column(String(50), nullable=True)  # 指派给谁
+    tags = Column(String(256), nullable=True)  # 标签，逗号分隔
+
+
+class KnowledgeGraph(Base):
+    """Knowledge graph snapshot - stores auto-generated article knowledge graph"""
+    __tablename__ = "knowledge_graphs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    graph_data = Column(Text, nullable=False)  # JSON: nodes, edges, categories, summary
+    article_count = Column(Integer, nullable=False, default=0)
+    generated_at = Column(DateTime, default=datetime.now)
+    generated_by = Column(String(50), nullable=True)
+    status = Column(String(20), nullable=False, default="completed")  # completed/failed
+    message = Column(Text, nullable=True)  # Generation notes or error message

@@ -7,6 +7,7 @@ from ..database import get_db
 from ..models import WikiList, WikiFile, User, DocumentLock
 from ..schemas import DocCreate, DocUpdate, DocOut, DocListItem, FileContentOut, FileContentUpdate
 from ..auth import get_current_user
+from .nav import _sync_node_add_to_mkdocs
 
 router = APIRouter(prefix="/api/docs", tags=["documents"])
 
@@ -38,6 +39,9 @@ def _get_doc_with_content(wiki_list: WikiList, db: Session) -> dict:
         "status": wiki_list.status,
         "current_editor": wiki_list.current_editor,
         "content": content,
+        "publish_status": getattr(wiki_list, 'publish_status', 1),
+        "keep_hyphens": getattr(wiki_list, 'keep_hyphens', 0),
+        "hidden": getattr(wiki_list, 'hidden', 0),
     }
 
 
@@ -85,6 +89,9 @@ def list_documents(
             "status": doc.status,
             "create_time": doc.create_time,
             "current_editor": doc.current_editor,
+            "publish_status": getattr(doc, 'publish_status', 1),
+            "keep_hyphens": getattr(doc, 'keep_hyphens', 0),
+            "hidden": getattr(doc, 'hidden', 0),
         }
         for doc in docs
     ]
@@ -102,6 +109,7 @@ def create_document(data: DocCreate, db: Session = Depends(get_db), current_user
         create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         status=0,
         current_editor="",
+        publish_status=1,  # New doc is unpublished
     )
     db.add(wiki_list)
     db.commit()
@@ -116,6 +124,18 @@ def create_document(data: DocCreate, db: Session = Depends(get_db), current_user
     )
     db.add(wiki_file)
     db.commit()
+    
+    # Auto-add document to nav tree (mkdocs.yml) under the selected directory
+    if data.nav_parent_path is not None:
+        try:
+            _sync_node_add_to_mkdocs(
+                name=data.name,
+                parent_path=data.nav_parent_path or "",
+                mark=str(wiki_list.id),
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Failed to add doc to nav tree: %s", e)
     
     return _get_doc_with_content(wiki_list, db)
 
@@ -155,6 +175,15 @@ def update_document(
         wiki_list.description = data.description
     if data.status is not None:
         wiki_list.status = data.status
+    if data.keep_hyphens is not None:
+        wiki_list.keep_hyphens = data.keep_hyphens
+    if data.hidden is not None:
+        wiki_list.hidden = data.hidden
+    
+    # Mark as unpublished when doc metadata changes
+    if data.name is not None or data.status is not None:
+        if hasattr(wiki_list, 'publish_status'):
+            wiki_list.publish_status = 1
     
     db.commit()
     db.refresh(wiki_list)
@@ -186,6 +215,11 @@ def update_document_content(
         modified_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     )
     db.add(wiki_file)
+    
+    # Mark document as unpublished when content changes
+    if hasattr(wiki_list, 'publish_status'):
+        wiki_list.publish_status = 1
+    
     db.commit()
     
     # Clean up old versions, keep only the latest MAX_FILE_VERSIONS
